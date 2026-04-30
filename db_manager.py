@@ -783,7 +783,7 @@ def get_motor_breakin_history(motor_id: int) -> list:
 
 
 def get_motor_sessions(motor_id: int) -> list:
-    """Get all sessions for a motor with summary stats."""
+    """Get all sessions for a motor with summary stats and row count."""
     with get_connection() as conn:
         rows = conn.execute("""
             SELECT
@@ -798,13 +798,16 @@ def get_motor_sessions(motor_id: int) -> list:
                 b.peak_rpm,
                 b.avg_rpm,
                 b.peak_temp_c,
-                b.benchmark_type
+                b.benchmark_type,
+                COUNT(sd.data_id) AS row_count
             FROM sessions s
             LEFT JOIN motor_breakin_log mbl ON mbl.session_id = s.session_id
             LEFT JOIN programs pg ON mbl.program_id = pg.program_id
             LEFT JOIN profiles pr ON pg.profile_id = pr.profile_id
             LEFT JOIN benchmarks b ON b.session_id = s.session_id
+            LEFT JOIN session_data sd ON sd.session_id = s.session_id
             WHERE s.motor_id = ?
+            GROUP BY s.session_id
             ORDER BY s.session_date DESC
         """, (motor_id,)).fetchall()
         return [dict(r) for r in rows]

@@ -3069,12 +3069,11 @@ async function mrShowMotorDetail(motorId) {
     sessHtml = '<div class="mr-empty" style="padding:8px 0">No sessions recorded yet.</div>';
   } else {
     sessions.forEach((s, i) => {
-      const hasData = s.peak_rpm || s.program_name;
       sessHtml += `<div class="mr-session-row">
         <span class="mr-session-type ${s.session_type}">${s.session_type}</span>
         <span style="color:var(--text2);font-family:var(--mono);font-size:11px">${s.program_name || '—'}</span>
         <span class="mr-session-rpm">${s.peak_rpm ? s.peak_rpm.toLocaleString() + ' RPM' : '—'}</span>
-        ${hasData ? `<button class="mr-compare-btn" id="cmpBtn-${s.session_id}" onclick="mrToggleCompare(${s.session_id}, this)">Compare</button>` : '<span></span>'}
+        <button class="mr-compare-btn" id="cmpBtn-${s.session_id}" onclick="mrToggleCompare(${s.session_id}, '${motor.identifier}', this)">Compare</button>
         <button class="mr-compare-btn" style="border-color:var(--danger);color:var(--danger);" onclick="mrDeleteSession(${s.session_id}, ${motorId})">✕ Delete</button>
         <span class="mr-session-date">${(s.session_date||'').slice(0,10)}</span>
       </div>`;
@@ -3146,90 +3145,328 @@ async function mrDeleteSession(sessionId, motorId) {
   }
 }
 
-// Compare sessions — overlay on RPM chart
-let compareSessionIds = [];
-let compareColors = ['#00e5ff','#ff6b00','#39ff14','#ffcc00','#ff2244'];
+// ═══════════════════════════════════════════════════════════════
+// MOTOR COMPARISON
+// ═══════════════════════════════════════════════════════════════
 
-async function mrToggleCompare(sessionId, btn) {
-  const idx = compareSessionIds.indexOf(sessionId);
+let compareItems   = [];   // { sessionId, motorIdentifier, peakRpm, color }
+let compareColors  = ['#00e5ff','#ff6b00','#39ff14','#ffcc00','#ff2244'];
+let compareDataCache = {}; // sessionId -> rows array
+
+// Toggle a session in/out of the comparison tray
+async function mrToggleCompare(sessionId, motorIdentifier, btn) {
+  const idx = compareItems.findIndex(c => c.sessionId === sessionId);
   if (idx === -1) {
-    if (compareSessionIds.length >= 5) { showToast('Max 5 sessions for comparison', true); return; }
-    compareSessionIds.push(sessionId);
+    if (compareItems.length >= 5) { showToast('Max 5 sessions for comparison', true); return; }
+    compareItems.push({
+      sessionId,
+      motorIdentifier,
+      color: compareColors[compareItems.length]
+    });
     btn.classList.add('active');
   } else {
-    compareSessionIds.splice(idx, 1);
+    compareItems.splice(idx, 1);
     btn.classList.remove('active');
+    // Re-assign colors to remaining items
+    compareItems.forEach((c, i) => c.color = compareColors[i]);
   }
+  renderCompareTray();
+}
+
+// Tray — persistent bar across the bottom of the Motors tab
+function renderCompareTray() {
+  let tray = document.getElementById('mrCompareTray');
+  if (!tray) {
+    tray = document.createElement('div');
+    tray.id = 'mrCompareTray';
+    tray.style.cssText = `
+      position:sticky; bottom:0; left:0; right:0;
+      background:#0d1117; border-top:1px solid var(--border2);
+      padding:10px 16px; display:flex; align-items:center;
+      gap:10px; flex-wrap:wrap; z-index:50; min-height:46px;
+    `;
+    const motorTab = document.getElementById('tabMotors') || document.querySelector('.tab-panel');
+    if (motorTab) motorTab.appendChild(tray);
+  }
+
+  if (!compareItems.length) {
+    tray.style.display = 'none';
+    return;
+  }
+
+  tray.style.display = 'flex';
+
+  const chips = compareItems.map(c => `
+    <span style="display:inline-flex;align-items:center;gap:5px;
+                 background:#151b22;border:1px solid ${c.color};
+                 border-radius:3px;padding:3px 8px;font-family:var(--mono);font-size:11px;">
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c.color}"></span>
+      ${c.motorIdentifier} · #${c.sessionId}
+      <span style="cursor:pointer;color:var(--text3);margin-left:2px;"
+            onclick="mrRemoveCompare(${c.sessionId})">✕</span>
+    </span>
+  `).join('');
+
+  const canRun = compareItems.length >= 2;
+  const hint   = compareItems.length === 1
+    ? '<span style="color:var(--text3);font-size:11px;font-family:var(--mono);">Select at least one more session to compare</span>'
+    : '';
+
+  tray.innerHTML = `
+    <span style="font-family:var(--display);font-size:9px;letter-spacing:2px;color:var(--text3);white-space:nowrap;">COMPARE</span>
+    ${chips}
+    ${hint}
+    <div style="flex:1"></div>
+    ${canRun ? `<button class="btn-primary" style="font-size:11px;padding:4px 14px;" onclick="mrRunComparison()">▶ View in Charts</button>` : ''}
+    <button class="btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="mrClearCompare()">Clear</button>
+  `;
+}
+
+function mrRemoveCompare(sessionId) {
+  compareItems = compareItems.filter(c => c.sessionId !== sessionId);
+  compareItems.forEach((c, i) => c.color = compareColors[i]);
+  const btn = document.getElementById('cmpBtn-' + sessionId);
+  if (btn) btn.classList.remove('active');
+  renderCompareTray();
+  // Clear stats panel if fewer than 2 sessions remain — results are no longer valid
+  if (compareItems.length < 2) {
+    const panel = document.getElementById('compareStatsPanel');
+    if (panel) panel.innerHTML = '';
+    drawChart('chartRpm', chartData.rpm, '#00e5ff', null, true);
+  }
+}
+
+function mrClearCompare() {
+  compareItems.forEach(c => {
+    const btn = document.getElementById('cmpBtn-' + c.sessionId);
+    if (btn) btn.classList.remove('active');
+  });
+  compareItems = [];
+  compareDataCache = {};
+  renderCompareTray();
+  // Clear stats panel
+  const panel = document.getElementById('compareStatsPanel');
+  if (panel) panel.innerHTML = '';
+  // Restore live chart
+  drawChart('chartRpm', chartData.rpm, '#00e5ff', null, true);
+}
+
+async function mrRunComparison() {
+  if (compareItems.length < 2) {
+    showToast('Select at least 2 sessions to compare', true);
+    return;
+  }
+
+  switchTab('charts');
+  showToast('Loading comparison...');
+
+  // Fetch session row data for any not yet cached
+  for (const item of compareItems) {
+    if (compareDataCache[item.sessionId] === undefined) {
+      const res = await apiGet('/api/sessions/' + item.sessionId + '/data');
+      compareDataCache[item.sessionId] = (res && res.rows) ? res.rows : [];
+    }
+  }
+
+  // For sessions with no rows, try to pull benchmark summary as fallback
+  for (const item of compareItems) {
+    if (!compareDataCache[item.sessionId].length && !item.benchmarkFallback) {
+      const res = await apiGet('/api/motors/' + item.motorIdentifier + '/sessions');
+      if (res && res.sessions) {
+        const sess = res.sessions.find(s => s.session_id === item.sessionId);
+        if (sess && (sess.peak_rpm || sess.avg_rpm)) {
+          item.benchmarkFallback = {
+            peak_rpm: sess.peak_rpm || 0,
+            avg_rpm:  sess.avg_rpm  || 0,
+            peak_temp_c: sess.peak_temp_c || null
+          };
+        }
+      }
+    }
+  }
+
   await renderComparisonChart();
 }
 
 async function renderComparisonChart() {
-  if (!compareSessionIds.length) {
-    // Restore live chart
-    drawChart('chartRpm', chartData.rpm, '#00e5ff', null, true);
+  const canvas = document.getElementById('chartRpm');
+  if (!canvas) return;
+
+  let allMax = 0;
+  const datasets = [];
+  let anyFallback = false;
+
+  for (const item of compareItems) {
+    const rows = compareDataCache[item.sessionId] || [];
+    const rpms = rows.map(r => r.rpm || 0).filter(v => v > 0);
+
+    if (rpms.length) {
+      // Full row data available — use it
+      allMax = Math.max(allMax, ...rpms);
+      datasets.push({ ...item, rpms, isFallback: false });
+    } else if (item.benchmarkFallback) {
+      // No rows — synthesise a flat line at peak RPM for visual comparison
+      // Use 60 points so it renders as a clear bar-style line
+      const peak = item.benchmarkFallback.peak_rpm;
+      const avg  = item.benchmarkFallback.avg_rpm;
+      // Simulate a rough ramp: avg for first half, peak for second half
+      const synth = Array(30).fill(avg).concat(Array(30).fill(peak));
+      allMax = Math.max(allMax, peak);
+      datasets.push({ ...item, rpms: synth, isFallback: true,
+                      peakRpm: peak, avgRpm: avg,
+                      peakTemp: item.benchmarkFallback.peak_temp_c });
+      anyFallback = true;
+    }
+    // Sessions with no rows and no benchmark are silently skipped
+  }
+
+  if (!datasets.length || !allMax) {
+    showToast('No data found for selected sessions — run a session with the new version to record row data', true);
     return;
   }
 
-  // Switch to Charts tab so user sees it
-  switchTab('charts');
-
-  const canvas = document.getElementById('chartRpm');
+  // Draw chart
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
-
-  // Background
   ctx.fillStyle = '#0a0c0f';
   ctx.fillRect(0, 0, W, H);
 
-  let allMax = 0;
-  const sessionDatasets = [];
+  datasets.forEach(ds => {
+    const n = ds.rpms.length;
+    const toX = i => (n > 1) ? (i / (n - 1)) * W : W / 2;
+    const toY = v => H - (v / allMax) * H * 0.88 - H * 0.05;
 
-  for (let i = 0; i < compareSessionIds.length; i++) {
-    const sid = compareSessionIds[i];
-    const data = await apiGet('/api/sessions/' + sid + '/data');
-    if (!data || !data.rows) continue;
-    const rpms = data.rows.map(r => r.rpm || 0);
-    allMax = Math.max(allMax, ...rpms);
-    sessionDatasets.push({ rpms, color: compareColors[i], sessionId: sid });
-  }
+    // Fallback sessions shown dashed
+    if (ds.isFallback) {
+      ctx.setLineDash([6, 4]);
+    } else {
+      ctx.setLineDash([]);
+    }
 
-  if (!allMax) return;
-
-  // Draw each session
-  sessionDatasets.forEach(ds => {
-    const toX = i => (i / (ds.rpms.length - 1)) * W;
-    const toY = v => H - (v / allMax) * H * 0.9 - H * 0.05;
-
-    // Fill
+    // Gradient fill
     const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, ds.color + '30');
+    grad.addColorStop(0, ds.color + '20');
     grad.addColorStop(1, ds.color + '00');
     ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(toX(0), H);
     ds.rpms.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
-    ctx.lineTo(toX(ds.rpms.length - 1), H);
+    ctx.lineTo(toX(n - 1), H);
     ctx.closePath();
     ctx.fill();
 
     // Line
     ctx.strokeStyle = ds.color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.8;
     ctx.lineJoin = 'round';
     ctx.beginPath();
     ds.rpms.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
     ctx.stroke();
+    ctx.setLineDash([]);
   });
 
   // Legend
-  sessionDatasets.forEach((ds, i) => {
+  datasets.forEach((ds, i) => {
     ctx.fillStyle = ds.color;
-    ctx.fillRect(10, 10 + i * 18, 12, 3);
+    ctx.fillRect(12, 12 + i * 20, 14, 3);
     ctx.fillStyle = '#c8d8e8';
-    ctx.font = '10px monospace';
-    ctx.fillText('Session ' + ds.sessionId, 28, 14 + i * 18);
+    ctx.font = '11px monospace';
+    const peak = ds.isFallback ? ds.peakRpm : Math.max(...ds.rpms);
+    const label = `${ds.motorIdentifier}  peak ${peak.toLocaleString()} RPM${ds.isFallback ? '  (benchmark summary)' : ''}`;
+    ctx.fillText(label, 32, 16 + i * 20);
   });
+
+  if (anyFallback) {
+    ctx.fillStyle = 'rgba(255,204,0,0.7)';
+    ctx.font = '10px monospace';
+    ctx.fillText('Dashed = benchmark summary only — no row data (sessions pre-v3.0)', 12, H - 10);
+  }
+
+  renderCompareStatsTable(datasets);
+}
+
+function renderCompareStatsTable(datasets) {
+  let panel = document.getElementById('compareStatsPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'compareStatsPanel';
+    panel.style.cssText = 'margin-top:12px;font-family:var(--mono);font-size:11px;';
+    const chartsPanel = document.querySelector('#tabCharts') || document.querySelector('.charts-panel');
+    if (chartsPanel) chartsPanel.appendChild(panel);
+  }
+
+  // Build stat rows — handle both full data and benchmark fallback
+  const statDefs = [
+    {
+      label: 'Peak RPM',
+      fn: ds => ds.isFallback
+        ? ds.peakRpm.toLocaleString()
+        : Math.max(...ds.rpms).toLocaleString(),
+      val: ds => ds.isFallback ? ds.peakRpm : Math.max(...ds.rpms)
+    },
+    {
+      label: 'Avg RPM',
+      fn: ds => ds.isFallback
+        ? ds.avgRpm.toLocaleString()
+        : Math.round(ds.rpms.reduce((a,b)=>a+b,0)/ds.rpms.length).toLocaleString(),
+      val: ds => ds.isFallback ? ds.avgRpm : Math.round(ds.rpms.reduce((a,b)=>a+b,0)/ds.rpms.length)
+    },
+    {
+      label: 'Peak Temp',
+      fn: ds => ds.isFallback
+        ? (ds.peakTemp != null ? ds.peakTemp + ' °C' : '—')
+        : (ds.rpms.length ? '—' : '—'),   // temp not in RPM array — would need separate fetch
+      val: ds => ds.isFallback ? (ds.peakTemp || 0) : 0
+    },
+    {
+      label: 'Data source',
+      fn: ds => ds.isFallback ? 'Benchmark summary' : ds.rpms.length.toLocaleString() + ' rows',
+      val: ds => 0   // not compared
+    }
+  ];
+
+  const peaks = datasets.map(ds => ds.isFallback ? ds.peakRpm : Math.max(...ds.rpms));
+  const bestIdx = peaks.indexOf(Math.max(...peaks));
+
+  const headers = datasets.map(ds =>
+    `<th style="color:${ds.color};padding:4px 14px;text-align:right;">
+      ${ds.motorIdentifier}<br>
+      <span style="color:var(--text3);font-size:9px;">#${ds.sessionId}${ds.isFallback ? ' ⚠' : ''}</span>
+    </th>`
+  ).join('');
+
+  const tableRows = statDefs.map(r => {
+    const cells = datasets.map((ds, i) => {
+      const display = r.fn(ds);
+      const isBest  = r.label === 'Peak RPM' && i === bestIdx;
+      return `<td style="text-align:right;padding:4px 14px;
+                color:${isBest ? ds.color : 'var(--text2)'};
+                ${isBest ? 'font-weight:bold;' : ''}">
+        ${display}${isBest ? ' ★' : ''}
+      </td>`;
+    }).join('');
+    return `<tr><td style="color:var(--text3);padding:4px 14px;">${r.label}</td>${cells}</tr>`;
+  }).join('');
+
+  const fallbackNote = datasets.some(d => d.isFallback)
+    ? `<div style="color:rgba(255,204,0,0.7);font-size:10px;padding:6px 14px;">
+        ⚠ Sessions marked with ⚠ have no row data — benchmark summary figures shown.
+        These sessions were recorded before v3.0. New sessions will have full row data.
+      </div>` : '';
+
+  panel.innerHTML = `
+    ${fallbackNote}
+    <table style="border-collapse:collapse;width:100%;margin-top:4px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:4px 14px;color:var(--text3);font-weight:normal;"></th>
+          ${headers}
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+  `;
 }
 
 

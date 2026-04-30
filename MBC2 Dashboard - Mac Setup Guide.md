@@ -43,32 +43,41 @@ If you get an error or a prompt to install developer tools:
 2. Download the latest version for macOS and run the installer
 3. Reopen Terminal and run `python3 --version` again to confirm
 
+> **Note about the zsh message:** If Terminal shows a message saying *"The default interactive shell is now zsh"*, that's normal on modern Macs — it's not an error. You can either ignore it or run `chsh -s /bin/zsh` to switch to zsh and stop seeing it. Neither option affects the dashboard.
+
 ---
 
 ## Step 3 — Prepare the launcher to run
 
 Two things need to happen before the launcher will work. Do both before trying to run it.
 
-### 3a — Set execute permission (required)
+### 3a — Allow through Gatekeeper (required on first launch)
 
-Downloaded files on Mac don't have execute permission by default. Without this, the file will just display its contents as text instead of running.
+Because the file was downloaded from the internet, macOS will block it the first time:
 
-1. Open **Terminal** (search for it in Spotlight with `Cmd + Space`)
-2. Type `chmod +x ` (with a space after it — don't press Enter yet)
-3. Open Finder and locate **`Start MBC2 Dashboard.command`** in the MBC2 Dashboard folder
-4. Drag the file into the Terminal window — the full path will be filled in automatically
-5. Press **Enter**
+1. In Finder, locate **`Start MBC2 Dashboard.command`** in the MBC2 Dashboard folder
+2. **Right-click** the file and select **Open**
+3. A warning will appear saying the file is from an unidentified developer — click **Open** anyway
 
-That's it — you only need to do this once.
+> After the first launch, you can double-click it normally. If the file just opens as a text document instead of running, complete Step 3b first.
 
-### 3b — Allow through Gatekeeper (required on first launch)
+### 3b — Set execute permission (if the launcher opens as text instead of running)
 
-Because the file was downloaded from the internet, macOS will warn you the first time:
+Downloaded files on Mac sometimes don't have execute permission. If double-clicking the launcher just shows its contents as text, fix it like this:
 
-1. In Finder, **right-click** `Start MBC2 Dashboard.command` and select **Open**
-2. A warning will appear saying the file is from an unidentified developer — click **Open** anyway
+1. Open **Terminal** (Cmd + Space → type Terminal → Enter)
+2. If you see the zsh message, just press Enter to dismiss it
+3. Navigate to the MBC2 Dashboard folder — the easiest way is to type `cd ` (with a space after it), then drag the **MBC2 Dashboard folder** from Finder into the Terminal window, then press Enter
+4. Run this command exactly as shown:
 
-> After the first launch, you can double-click it normally.
+```
+chmod +x "Start MBC2 Dashboard.command"
+```
+
+5. Press **Enter** — no output means it worked
+6. Go back to Step 3a and right-click → Open the launcher
+
+You only need to do this once.
 
 ---
 
@@ -100,7 +109,18 @@ Because the file was downloaded from the internet, macOS will warn you the first
    - `cu.wchusbserial_XXXXXXXX`
 4. Select it and click **Connect**
 
+> Always use the `cu.` version if you see both `cu.` and `tty.` for the same device — the `tty.` variant can cause connection issues on Mac.
+
 The dashboard will start showing live data as soon as the MBC2 begins a session.
+
+---
+
+## Stopping the dashboard
+
+1. Click **Stop Server** inside the dashboard (preferred)
+2. Then close the Terminal window
+
+> Closing the Terminal window without stopping the server first can leave a background process running on some macOS versions. If the dashboard won't start next time, restart your Mac to clear it.
 
 ---
 
@@ -117,22 +137,17 @@ The dashboard will start showing live data as soon as the MBC2 begins a session.
 
 **Terminal window closes immediately after launching**
 - Python is not installed — follow Step 2
-- Try running the server manually: open Terminal, drag the folder into the Terminal window to navigate to it, then type `python3 server.py`
+- Try running the server manually: open Terminal, navigate to the MBC2 Dashboard folder (drag it in after typing `cd `), then run `python3 server.py`
 
 **Dashboard opens but shows an orange warning banner**
 - You opened `mbc2-dashboard.html` directly instead of using the launcher
 - Close the tab, run the launcher again, and use **http://localhost:8766**
 
-**Port shows as `tty.` instead of `cu.`**
-- Always use the `cu.` version — the `tty.` variant can cause connection issues on Mac
+**The launcher opens as a text file instead of running**
+- Execute permission is not set — follow Step 3b
 
----
-
-## Stopping the dashboard
-
-Close the Terminal window that opened when you launched the dashboard. This stops the server.
-
-You can also click **Stop Server** inside the dashboard if the button is visible.
+**"Syntax error near unexpected token" appears in Terminal**
+- You have extra characters around the file path — run the chmod command exactly as shown in Step 3b, with the filename in quotes
 
 ---
 
@@ -140,8 +155,8 @@ You can also click **Stop Server** inside the dashboard if the button is visible
 
 - [ ] CH340 driver installed and Mac restarted
 - [ ] Python 3 installed
-- [ ] Execute permission set on launcher (`chmod +x`)
 - [ ] Launcher allowed through Gatekeeper (right-click → Open, first time only)
+- [ ] Execute permission set if needed (`chmod +x "Start MBC2 Dashboard.command"`)
 - [ ] MBC2 plugged in via USB
 - [ ] Dashboard opened in **Chrome or Edge** (not Safari or Firefox)
 - [ ] Connected to `cu.usbserial-XXXX` or `cu.wchusbserial-XXXX` port

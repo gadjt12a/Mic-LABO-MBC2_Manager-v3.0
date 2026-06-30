@@ -2938,18 +2938,19 @@ function restoreActiveProgram() {
 // ═══════════════════════════════════════════════════════════════
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,5); }
 
+let pendingNewProfile = null;
+
 function newProfile() {
   const profile = {
     id: genId(), name: 'New Profile', motor: '', chassis: 'FM-A', class: 'Evo', notes: '', programs: []
   };
-  programLibrary.profiles.push(profile);
-  saveLibrary();
-  renderDrawer(); buildProgSelector();
-  editProfile(profile.id);
+  pendingNewProfile = profile;
+  editProfile(profile.id, true);
 }
 
-function editProfile(profileId) {
-  const profile = programLibrary.profiles.find(p => p.id === profileId);
+function editProfile(profileId, isNew = false) {
+  const profile = isNew && pendingNewProfile ? pendingNewProfile
+                : programLibrary.profiles.find(p => p.id === profileId);
   if (!profile) return;
 
   document.getElementById('editorTitle').textContent = 'Edit Profile — ' + profile.name;
@@ -2994,13 +2995,21 @@ function editProfile(profileId) {
 }
 
 function saveProfileEdit(profileId) {
-  const profile = programLibrary.profiles.find(p => p.id === profileId);
+  const isNew = pendingNewProfile && pendingNewProfile.id === profileId;
+  const profile = isNew ? pendingNewProfile
+                : programLibrary.profiles.find(p => p.id === profileId);
   if (!profile) return;
   profile.name    = document.getElementById('ep_name').value.trim() || 'Profile';
   profile.motor   = document.getElementById('ep_motor').value.trim();
   profile.chassis = document.getElementById('ep_chassis').value;
   profile.class   = document.getElementById('ep_class').value;
   profile.notes   = document.getElementById('ep_notes').value.trim();
+
+  if (isNew) {
+    programLibrary.profiles.push(profile);
+    pendingNewProfile = null;
+  }
+
   saveLibrary(); renderDrawer(); buildProgSelector();
   closeEditor(); showToast('Profile saved');
   if (typeof refreshAll === 'function') refreshAll();
@@ -3013,6 +3022,8 @@ function deleteProfile(profileId) {
   saveLibrary(); renderDrawer(); buildProgSelector();
   showToast('Profile deleted');
 }
+
+let pendingNewProgram = null;
 
 function newProgram(profileId) {
   const profile = programLibrary.profiles.find(p => p.id === profileId);
@@ -3027,14 +3038,14 @@ function newProgram(profileId) {
       { volts:2.0, dir:'R', time:'4:00', cool:'Full Cool' }
     ]
   };
-  profile.programs.push(prog);
-  saveLibrary(); renderDrawer(); buildProgSelector();
-  editProgram(profileId, prog.id);
+  pendingNewProgram = { profileId, prog };
+  editProgram(profileId, prog.id, true);
 }
 
-function editProgram(profileId, programId) {
+function editProgram(profileId, programId, isNew = false) {
   const profile = programLibrary.profiles.find(p => p.id === profileId);
-  const prog = profile ? profile.programs.find(p => p.id === programId) : null;
+  const prog = isNew && pendingNewProgram ? pendingNewProgram.prog
+             : (profile ? profile.programs.find(p => p.id === programId) : null);
   if (!prog) return;
 
   const stepsHTML = prog.steps.map((s,i) => `
@@ -3093,7 +3104,9 @@ function editProgram(profileId, programId) {
 
 function saveProgramEdit(profileId, programId) {
   const profile = programLibrary.profiles.find(p => p.id === profileId);
-  const prog = profile ? profile.programs.find(p => p.id === programId) : null;
+  const isNew = pendingNewProgram && pendingNewProgram.prog.id === programId;
+  const prog = isNew ? pendingNewProgram.prog
+             : (profile ? profile.programs.find(p => p.id === programId) : null);
   if (!prog) return;
 
   prog.name      = document.getElementById('ep2_name').value.trim() || 'Program';
@@ -3112,6 +3125,11 @@ function saveProgramEdit(profileId, programId) {
       time:  document.getElementById('s'+i+'_t').value.trim(),
       cool:  document.getElementById('s'+i+'_c').value.trim()
     });
+  }
+
+  if (isNew && profile) {
+    profile.programs.push(prog);
+    pendingNewProgram = null;
   }
 
   saveLibrary(); renderDrawer(); buildProgSelector();
@@ -3191,7 +3209,11 @@ function showGuide(profileId, programId) {
 }
 
 function closeGuide() { document.getElementById('guideModal').classList.remove('open'); }
-function closeEditor() { document.getElementById('editorModal').classList.remove('open'); }
+function closeEditor() {
+  pendingNewProfile = null;
+  pendingNewProgram = null;
+  document.getElementById('editorModal').classList.remove('open');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // EXPORT / IMPORT LIBRARY

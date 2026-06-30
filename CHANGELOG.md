@@ -4,6 +4,81 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ---
 
+## [3.3.0] — 2026-07-01
+
+### Bidirectional Device Control
+
+This release adds full bidirectional serial communication with the MBC2 device. You can now control the device entirely from the dashboard without touching the physical buttons.
+
+### New Features
+
+**Device Control Panel**
+- START / STOP buttons for MANU mode
+- PAUSE / RESUME with automatic button switching based on run_state
+- NEXT STEP with confirmation dialog
+- Voltage slider and input with live ACK-confirmed display
+- Current limit input with SET button
+- Direction toggle (R / N) with R visually emphasised
+- START PROG to launch saved programs (1-50)
+- Run state indicator showing device status (Running, Paused, Cooling, Overheat, etc.)
+
+**Program Sync (GET_PROG / SET_PROG)**
+- READ button fetches and decodes programs from device
+- WRITE button encodes and sends programs to device RAM
+- Full encoding/decoding support:
+  - Program names (4-char, index 0-36 character table)
+  - Non-linear time index (0-77 → 0s to 15h)
+  - Voltage (internal × 0.1V)
+  - Direction (0-4 ↔ OFF/N/R/NP/RP)
+- Program display shows name, cycles, target RPM, and step table
+
+**Device Settings (GET_SETTING / SET_SETTING)**
+- READ ALL button fetches all 10 device settings
+- Settings display with human-readable labels and units
+- Settings editor modal for modifying values
+- Per-setting SET buttons write individual settings to RAM
+- Supported settings: overheat, limit_volt, limit_current, brightness, measure_step, cheer_up, pulse_v, pulse_sec, pulse_pattern, buzzer_volume
+
+**SAVE TO EEPROM**
+- Explicit button with confirmation warning
+- Warns about EEPROM write cycle limits
+- Never automatic — always user-initiated
+
+**GET_LOG Integration**
+- Automatic log retrieval when device stops
+- Parses LOG:HEAD, LOG:STEP, LOG:CYC, LOG:END responses
+- Displays per-step summary table (cycle, step, RPM, max RPM, voltage, current, temp)
+- Overheat steps highlighted in red
+
+**Auto Recording**
+- Recording session auto-starts when START or START PROG clicked
+- Recording auto-stops when STOP clicked
+
+### Parser Improvements
+
+- Serial parser now routes lines by prefix (STATUS / PROG / SETTING / LOG / CSV)
+- Full run_state tracking (0=Running, 1=Paused, 2=Cooling, 3=Overheat, 5=Finished, 90=Over Current, 226=INA226 Error)
+- STATUS message handler for ACKs, errors, and async notifications (COOLING, LOW_AMP_LIMIT)
+- Debug lines properly ignored at parser entry point
+- Fixed raw data column labels (col[13] is current_ma, not col[19])
+
+### Other Changes
+
+- Added .gitignore (excludes __pycache__, *.db-shm, *.db-wal)
+- Added docs/ folder with technical documentation:
+  - SERIAL_SPEC.md — full serial protocol specification
+  - DB_SCHEMA.md — database schema reference
+  - FEATURE_ROADMAP.md — feature implementation status
+  - HARDWARE_REFERENCE.md — MBC2 device specs
+  - VERSION_HISTORY.md — detailed version history
+- Added CLAUDE.md for Claude Code project context
+
+### Requirements
+
+- **MBC2 firmware v0.110+** required for bidirectional features
+
+---
+
 ## [3.0.0] — 2026-04-30
 
 ### Architecture — DB-only storage
@@ -34,23 +109,7 @@ All session and program data is now stored exclusively in `mbc2.db`. The `data/s
 - Added `get_all_sessions()` — returns all sessions with motor identifier, model, peak RPM, benchmark type, and row count.
 - Added `delete_session(session_id)` — cascades through `session_data`, `benchmarks`, and `motor_breakin_log`.
 - Added `export_session_csv(session_id)` — generates a CSV string from `session_data` rows on demand, no file written to disk.
-- Added `parse_mbc2_row(raw_line, session_id, timestamp_ms)` — parses a raw MBC2 serial CSV line into a `session_data` row dict. Available for use if raw line ingestion is added in future.
-
-### motor_api.py
-
-- Removed duplicate fuzzy timestamp CSV matching block. Session data retrieval now goes directly to the DB via `db.get_session_data()`.
-
-### mbc2-dashboard.html
-
-- `autoSaveSession()` — maps `sessionData` rows to DB field format and POSTs the full row array to `POST /api/sessions`. No CSV file is created.
-- `saveSessionCSV()` — when a `session_id` exists, triggers a download from `/api/sessions/<id>/export` instead of building a CSV in-browser from memory.
-- `deleteSession()` — uses the numeric `session_id` stored on the session object instead of deriving a filename.
-- `loadLibrary()` — reads from `GET /api/profiles` (DB). DB field names (`profile_id`, `mbc2_label`, `duration_sec`, etc.) normalised to UI field names on load.
-- `saveLibrary()` — posts to `POST /api/profiles/import` (DB) instead of `POST /api/programs` (JSON file).
-- `loadServerSessions()` — reads session index from `GET /api/sessions`. Returns metadata (motor, peak RPM, row count) immediately; rows are not fetched until a session is opened.
-- `loadSessionIntoView()` — now `async`. Fetches rows from `GET /api/sessions/<id>/data` on first open if not already in memory. Normalises DB field names back to UI format.
-- `renderSessionList()` — session chips now display motor identifier and peak RPM from DB metadata.
-- Comparison chart updated to use `GET /api/sessions/<id>/data` instead of the old motor-scoped session data route.
+- Added `parse_mbc2_row(raw_line, session_id, timestamp_ms)` — parses a raw MBC2 serial CSV line into a `session_data` row dict.
 
 ---
 
@@ -59,13 +118,13 @@ All session and program data is now stored exclusively in `mbc2.db`. The `data/s
 This repo starts at v3.0.0. The following is a condensed summary of the development that took place in the previous repository before the architecture was stable enough to version properly.
 
 **v0.4.0 — 2026-04-26**
-Target RPM reference line on live chart. kV curve in benchmark results panel. Motor comparison side-by-side stats table and RPM overlay for up to 5 sessions. Session notes and ambient temperature fields. Per-step cooldown timer in sidebar. Pre-treatment structured dropdown replacing freetext field. Twelve bug fixes covering PRO motor direction lock, program DB ID resolution, duplicate payload keys, dropdown visibility sync, motor detail view, session chip JS escaping, roster sort indicators, filename sanitiser, and benchmark kV display.
+Target RPM reference line on live chart. kV curve in benchmark results panel. Motor comparison side-by-side stats table and RPM overlay for up to 5 sessions. Session notes and ambient temperature fields. Per-step cooldown timer in sidebar. Pre-treatment structured dropdown replacing freetext field.
 
 **v0.3.0 — 2026-04-24**
-SQLite motor registry database introduced (`mbc2.db`). Motors tab added alongside Charts and Raw Data. Motor registration with auto-generated identifiers (`SD-R-01` format). Full Tamiya motor lineup and chassis assignment. Break-in program linking. Motor registry view with session count and best peak RPM. Full API route set for motors and profiles. Database schema covering 11 tables: mount types, chassis, motor models, motors, chassis assignments, profiles, programs, program steps, break-in log, sessions, session data, and benchmarks.
+SQLite motor registry database introduced (`mbc2.db`). Motors tab added alongside Charts and Raw Data. Motor registration with auto-generated identifiers (`SD-R-01` format). Full Tamiya motor lineup and chassis assignment. Break-in program linking.
 
 **v0.2.0 — 2026-04-23**
-Moved to server-based architecture (`server.py` on port 8766). Program library drawer with full profile and program CRUD. MBC2 Entry Guide modal. Active program selector with persistence. Firmware version checker. Session CSV save. Windows and Mac launchers. Program library backed by `data/programs.json` with localStorage fallback. Sessions saved as CSV files in `data/sessions/`.
+Moved to server-based architecture (`server.py` on port 8766). Program library drawer with full profile and program CRUD. MBC2 Entry Guide modal. Active program selector with persistence. Firmware version checker.
 
 **v0.1.0–v0.1.2 — 2026-04-23**
-Initial build. Web Serial API connection to MBC2 at 115200 baud. Live RPM, Amps, Voltage, kV efficiency, and Temperature charts. Session recording. Serial column mapping confirmed from live capture. Temperature −273°C sensor-disconnect handling. Firmware panel added.
+Initial build. Web Serial API connection to MBC2 at 115200 baud. Live RPM, Amps, Voltage, kV efficiency, and Temperature charts. Session recording. Serial column mapping confirmed from live capture.

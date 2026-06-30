@@ -1,26 +1,53 @@
 # MBC2 Dashboard
 
-Data logger, program library and motor registry for the mic-LABO Motor Boot Camp 2 (MBC2) motor break-in machine.
+Data logger, program library, motor registry, and **full bidirectional device control** for the mic-LABO Motor Boot Camp 2 (MBC2) motor break-in machine.
 
 ## Features
 
-- Live serial data logging from MBC2 via USB (Web Serial API)
-- Real-time charts — RPM, Amps, kV efficiency, Temperature
+### Live Monitoring
+- Real-time serial data logging from MBC2 via USB (Web Serial API)
+- Live charts — RPM, Amps, kV efficiency, Temperature
 - Target RPM reference line on live RPM chart from the active program
-- Program library — create, edit and store break-in profiles and programs
-- MBC2 Entry Guide — step-by-step reference for entering programs on the device
-- Session recording — all data saved to `mbc2.db`, CSV export available on demand
-- Firmware version checker and download links
-- **Motor registry** — register, track and compare individual motors with persistent SQLite database
-- **Benchmark mode** — records a 1.0→3.0V voltage ramp run with per-step kV curve results
-- **Motor comparison** — side-by-side stats table and RPM overlay for up to 5 sessions
 - Per-step cooldown timer — sidebar shows live COOLING countdown between program steps
+- Run state indicator (Running, Paused, Cooling, Overheat, Finished)
+
+### Bidirectional Device Control (NEW in v3.3)
+- **START / STOP / PAUSE / RESUME** — control the device directly from the dashboard
+- **Voltage control** — slider and input with live ACK-confirmed value display
+- **Current limit** — set CC limit with confirmation feedback
+- **Direction toggle** — switch between R (Reverse) and N (Normal)
+- **START PROG** — launch any saved program (1-50) from the dashboard
+- **NEXT STEP** — skip to next step with confirmation
+- **Program sync** — read/write device programs via GET_PROG/SET_PROG
+- **Device settings** — view and edit all device settings (overheat temp, voltage limits, etc.)
+- **SAVE TO EEPROM** — persist changes with confirmation warning
+- **GET_LOG** — automatic run summary retrieval when program stops
+
+### Program Library
+- Create, edit and store break-in profiles and programs
+- MBC2 Entry Guide — step-by-step reference for entering programs on the device
+- Import/export profiles as JSON
+
+### Motor Registry
+- Register and track individual motors with persistent SQLite database
+- Auto-generated identifiers (e.g. `SD-R-01`)
+- Benchmark mode — records a 1.0→3.0V voltage ramp with per-step kV results
+- Motor comparison — side-by-side stats and RPM overlay for up to 5 sessions
+- Efficiency rating (A/B/C/D) based on RPM and current draw
+
+### Session Management
+- All data saved to `mbc2.db` — no CSV files to manage
+- Auto-start recording when device starts
+- Auto-stop recording when device stops
+- CSV export available on demand
+- Firmware version checker and download links
 
 ## Requirements
 
 - Python 3.8 or higher
-- Chrome or Edge browser (Web Serial API required — Firefox not supported)
-- MBC2 connected via USB (CH340 driver may need to be installed on Windows)
+- Chrome or Edge browser (Web Serial API required — Firefox/Safari not supported)
+- MBC2 connected via USB (CH340 driver may need to be installed)
+- **MBC2 firmware v0.110+** for bidirectional control features
 
 ## Getting Started
 
@@ -30,13 +57,13 @@ Data logger, program library and motor registry for the mic-LABO Motor Boot Camp
 
 The script starts the local server and opens the dashboard in your default browser at `http://localhost:8766`.
 
-> If you open `mbc2-dashboard.html` directly without running the launcher, the Motor Registry and Program Library will not save — you will see an orange warning banner at the top.
+> If you open `mbc2-dashboard.html` directly without running the launcher, the Motor Registry and Program Library will not save — you will see connection errors in the console.
 
 ## Files
 
 ```
 MBC2_Dashboard/
-├── mbc2-dashboard.html          ← main app (open this in Chrome/Edge)
+├── mbc2-dashboard.html          ← main app (open via localhost:8766)
 ├── server.py                    ← local API server (started by the launcher)
 ├── db_manager.py                ← database functions
 ├── motor_api.py                 ← motor registry API routes
@@ -46,25 +73,38 @@ MBC2_Dashboard/
 ├── seed_programs.json           ← additional profiles seeded into DB on first run
 ├── START MBC2 DASHBOARD.bat     ← Windows launcher
 ├── Start MBC2 Dashboard.command ← Mac launcher
+├── CLAUDE.md                    ← Claude Code project context
+├── docs/                        ← technical documentation
+│   ├── SERIAL_SPEC.md           ← full serial protocol specification
+│   ├── DB_SCHEMA.md             ← database schema reference
+│   ├── FEATURE_ROADMAP.md       ← feature implementation status
+│   ├── HARDWARE_REFERENCE.md    ← MBC2 device and Mini 4WD context
+│   └── VERSION_HISTORY.md       ← detailed version changelog
 ├── README.md
 └── CHANGELOG.md
 ```
 
-> **All data is stored in `mbc2.db`.** There are no CSV session files or `data/` folder. Use the ⬇ Save CSV button to export a session to CSV if you need to open it in Excel.
+## Device Control Panel
+
+The right sidebar now includes a **Device Control** section with:
+
+| Control | Function |
+|---------|----------|
+| START | Start MANU mode |
+| STOP | Stop motor and save log |
+| PAUSE / RESUME | Pause/resume current run (button changes based on state) |
+| NEXT | Skip to next step (with confirmation) |
+| Voltage slider | Adjust voltage in real-time (0-9V) |
+| Current limit | Set CC limit (0=OFF, up to 4.5A) |
+| Direction | Toggle R (Reverse) / N (Normal) |
+| START PROG | Launch a saved program by number (1-50) |
+| READ / WRITE | Sync programs with device |
+| SAVE TO EEPROM | Persist RAM changes to permanent storage |
+| Device Settings | View and edit all device configuration |
 
 ## Motor Registry
 
 The Motors tab lets you register and track individual motors across their entire life cycle.
-
-### Registering a motor
-
-1. Select the motor model (Single shaft or PRO dual shaft)
-2. Select break-in direction (Reverse or Forward — PRO dual shaft motors are Forward only)
-3. Tag the target chassis (optional — filters available chassis by shaft type)
-4. Link the break-in profile and sub-programs run (optional)
-5. Select pre-treatment applied (water, IPA, ChemZ No8, light oil, etc.)
-6. Add any additional notes
-7. Click **Register motor** — identifier is auto-generated and displayed
 
 ### Motor identifier format
 
@@ -72,21 +112,15 @@ The Motors tab lets you register and track individual motors across their entire
 
 Print on 12mm label tape, cut to 5mm, stick on motor end bell.
 
-### Motor detail and comparison
-
-Click any motor in the registry to open its detail panel showing benchmark history and session list. Use the **Compare** button on any session to add it to a side-by-side comparison. Up to 5 sessions can be compared at once across different motors.
-
 ### Chassis direction reference
 
-All Tamiya Mini 4WD chassis run the motor in **Reverse (R)** on the MBC2 as the race direction. This is confirmed across Front, Rear, and Midship mount types.
+All Tamiya Mini 4WD chassis run the motor in **Reverse (R)** on the MBC2 as the race direction.
 
 | Mount | Chassis | Break-in direction |
 |-------|---------|-------------------|
-| Front | FM-A, Super FM, FM | **R (Reverse)** — confirmed |
-| Rear | VZ, AR, VS, Super TZ-X, Super TZ, Super XX, Super X, Super-II, Super-1, Zero, Type 1–5 | **R (Reverse)** — confirmed |
-| Midship (dual shaft) | ME, MA, MS | **R (Reverse)** — confirmed |
-
-**Why R on all chassis:** The MBC2 treats the right contact as Positive and spins Normal to the right. All Tamiya Mini 4WD chassis mount the motor with the opposite polarity orientation to the MBC2 — so MBC2 Reverse drives the motor in the race direction regardless of chassis type.
+| Front | FM-A, Super FM, FM | **R (Reverse)** |
+| Rear | VZ, AR, VS, Super TZ-X, Super TZ, Super XX, Super X, Super-II, Super-1, Zero, Type 1–5 | **R (Reverse)** |
+| Midship (dual shaft) | ME, MA, MS | **R (Reverse)** |
 
 ## Program Library
 
@@ -98,52 +132,20 @@ Pre-populated with:
 - **Torque Tuned 2** — 3-stage break-in (A: seating, B: wake up, C: polish)
 - **Hyper Dash** — 3-stage break-in for high-RPM dash motors
 
-Each profile contains one or more named programs (e.g. TT2-A, TT2-B, TT2-C). Select the active program in the right panel — the **MBC2 Entry Guide** shows the exact values to enter on the device screen.
+## Serial Protocol
 
-Voltage steps are validated on save — values above 4.5V will show a warning (5V hard maximum).
+The dashboard now implements the full MBC2 bidirectional serial protocol. See `docs/SERIAL_SPEC.md` for the complete specification including:
 
-## Benchmark Mode
-
-Select **── Baseline ──** from the program dropdown and click **● Start Session**. Run the matching BASELINE program on the MBC2 — the dashboard records the run and displays a results panel with:
-
-- Peak RPM and average RPM/W
-- Average current at 3.0V
-- Efficiency rating (A / B / C / D)
-- Per-step kV table
-
-## Session Notes
-
-Before stopping a session, fill in the **Notes** field (lube used, track surface, conditions) and **Ambient °C** in the Sessions sidebar. Both are saved with the session and shown on the session chip. The ambient temp field is retained between sessions since it stays valid across multiple motors at the same bench location.
-
-Sessions are saved automatically to `mbc2.db` when a program completes or you click Stop. To export a session as a CSV file for use in Excel, click the **⬇ Save CSV** button — this generates the file on demand from the database.
-
-## MBC2 Direction Reference
-
-- **R** (Reverse on MBC2 display) = race direction for **all** Tamiya Mini 4WD chassis
-- **N** (Normal on MBC2 display) = opposite of race direction for all chassis
-
-The MBC2 mounts the motor with right contact = Positive. All Tamiya chassis mount the motor with opposite polarity, so MBC2 Reverse always corresponds to forward/race direction in the car.
-
-## Serial Column Mapping (confirmed)
-
-| Col | Field | Notes |
-|-----|-------|-------|
-| 0 | program_no | program number |
-| 1 | mode | MANU or program name |
-| 3 | cycle | current cycle number |
-| 4 | max_cycle | total cycles in program |
-| 5 | step | current step |
-| 10 | rpm | live RPM |
-| 11 | voltage_mv | millivolts (divide by 1000 for volts) |
-| 12 | direction | 1 = R, 0 = F |
-| 14 | elapsed | counter (increments each update) |
-| 15 | rpm_cap | MBC2 RPM cap setting |
-| 18 | temp_c | °C (−273 = sensor disconnected) |
-| 19 | amps | float in amps (multiply by 1000 for mA) |
+- CSV telemetry stream format (20 columns)
+- All commands (START, STOP, PAUSE, RESUME, SET_VOLTAGE, etc.)
+- Program read/write encoding (GET_PROG, SET_PROG)
+- Settings read/write (GET_SETTING, SET_SETTING)
+- Run log retrieval (GET_LOG)
 
 ## Hardware
 
 - ESP32-WROOM-32, 240MHz, 4MB flash
 - INA226 current sensor
 - CH340 USB-serial at 115200 baud
-- Latest firmware: v0.105 — download via the firmware panel or upload at `http://[MBC2-IP]/u`
+- **Firmware v0.110+** required for bidirectional features
+- OTA firmware updates via `http://[MBC2-IP]/u`

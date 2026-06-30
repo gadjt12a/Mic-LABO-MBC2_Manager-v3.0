@@ -10,6 +10,7 @@ Everything you need to get the MBC2 Dashboard running on Windows, step by step.
 - Google Chrome or Microsoft Edge browser
 - Python 3 (instructions below if you don't have it)
 - The MBC2 Dashboard folder
+- **MBC2 firmware v0.110+** for bidirectional control features
 
 ---
 
@@ -35,6 +36,8 @@ The `.exe` installer does not work on ARM — you need to install the `.dll` man
 3. Inside the extracted folder, find **`CH341SER.DLL`**
 4. **Right-click** the `.dll` file and select **Install**
 5. Restart your PC
+
+> **ARM64 driver note:** Use driver version **v3.9.2024.9** specifically. Newer versions dropped ARM64 support.
 
 > To check if the driver is already installed: plug in the MBC2, open **Device Manager** (search for it in the Start menu) and look under **Ports (COM & LPT)**. You should see something like `USB-SERIAL CH340 (COM3)`. If it shows a yellow warning icon, the driver needs installing.
 
@@ -96,7 +99,7 @@ Because the launcher was downloaded from the internet, Windows SmartScreen may b
 
 ## Step 6 — Connect to the MBC2
 
-1. In the dashboard, click **Connect** in the top left
+1. In the dashboard, click **Connect MBC2** in the top left
 2. A browser popup will appear listing available serial ports
 3. Look for a port with a name like:
    - `USB-SERIAL CH340 (COM3)`
@@ -104,7 +107,30 @@ Because the launcher was downloaded from the internet, Windows SmartScreen may b
    - The COM number may vary — if you have multiple, check Device Manager to confirm which one is the MBC2
 4. Select it and click **Connect**
 
-The dashboard will start showing live data as soon as the MBC2 begins a session.
+The status indicator will show **Connected** and the Device Control panel buttons will become active.
+
+---
+
+## Using the Device Control Panel (NEW in v3.3)
+
+Once connected, you can control the MBC2 directly from the dashboard:
+
+| Button | What it does |
+|--------|--------------|
+| **START** | Start motor in MANU mode |
+| **STOP** | Stop motor and retrieve run log |
+| **PAUSE** | Pause current run (button changes to RESUME) |
+| **NEXT** | Skip to next step (asks for confirmation) |
+| **Voltage slider** | Adjust voltage in real-time (0-9V) |
+| **Current limit** | Set over-current limit (0=OFF) |
+| **R / N** | Set direction (R=Reverse for all Mini 4WD) |
+| **START PROG** | Start a saved program by number (1-50) |
+| **READ / WRITE** | Sync programs with device |
+| **SAVE TO EEPROM** | Save changes permanently (warns first) |
+| **READ ALL** (Settings) | Load device settings |
+| **EDIT SETTINGS** | Change device configuration |
+
+Recording starts automatically when you click START or START PROG, and stops automatically when you click STOP.
 
 ---
 
@@ -119,12 +145,18 @@ The dashboard will start showing live data as soon as the MBC2 begins a session.
 **Port appears but no data comes through**
 - Make sure the MBC2 is powered on and running or at the menu screen
 - Confirm the baud rate is 115200 (set automatically by the dashboard)
+- Check the MBC2 firmware is v0.110 or higher for bidirectional features
+
+**Device control buttons don't work**
+- Make sure you're connected (status shows "Connected")
+- Check browser console (F12) for error messages
+- Verify MBC2 firmware is v0.110+ — older firmware doesn't support bidirectional commands
 
 **Command Prompt window closes immediately after launching**
 - Python is not installed or not added to PATH — follow Step 2 carefully
 - Try running the server manually: open Command Prompt, navigate to the MBC2 Dashboard folder using `cd` (e.g. `cd C:\Users\YourName\Downloads\MBC2_Dashboard`) then type `python server.py`
 
-**Dashboard opens but shows an orange warning banner**
+**Dashboard opens but Motor Registry / Programs don't work**
 - You opened `mbc2-dashboard.html` directly instead of using the launcher
 - Close the tab, run the launcher again, and use **http://localhost:8766**
 
@@ -150,5 +182,6 @@ You can also click **Stop Server** inside the dashboard if the button is visible
 - [ ] Python 3 installed with **Add to PATH** ticked
 - [ ] SmartScreen bypassed on first launch (More info → Run anyway)
 - [ ] MBC2 plugged in via USB
+- [ ] MBC2 firmware v0.110+ for bidirectional control
 - [ ] Dashboard opened in **Chrome or Edge** (not Firefox)
 - [ ] Connected to `USB-SERIAL CH340 (COMX)` port

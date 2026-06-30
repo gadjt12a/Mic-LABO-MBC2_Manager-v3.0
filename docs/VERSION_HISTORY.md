@@ -1,6 +1,16 @@
 # MBC2 Dashboard — Version History
 
-## v3.2 (current)
+## v3.3 (current)
+
+- **Phase 1: Parser hardening** — serial parser now routes lines by prefix
+- Added handlers for `STATUS:`, `PROG:`, `SETTING:`, `LOG:` message types
+- STATUS message handler processes ACKs, errors, and async notifications (`COOLING`, `LOW_AMP_LIMIT`)
+- Added `run_state` tracking (Running, Paused, Cooling, Overheat, Finished, Over Current, INA226 Error)
+- Added `sendCommand()` function for bidirectional communication
+- Fixed raw data column labels (col[13] is current_ma, not col[19])
+- Debug lines now properly ignored at parser entry point
+
+## v3.2
 
 - Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions
 - Added `duration_sec` and `end_reason` columns to `sessions`

@@ -6,17 +6,19 @@ Work through these in sequence. Do not jump ahead — each builds on the previou
 
 ---
 
-## Phase 1 — Parser hardening (do first)
+## Phase 1 — Parser hardening ✓ COMPLETE
 
 **Goal:** Make the serial parser robust before adding any new commands.
 
-- [ ] Ignore `Debug:` prefixed lines (firmware emits these; will be removed in future firmware)
-- [ ] Handle expanded `run_state` values: `1=Paused`, `3=Overheat`, `5=Finished`, `90=Over Current`, `226=INA226 error`
-- [ ] Handle async `STATUS:COOLING` notification (device-initiated, no command)
-- [ ] Handle async `STATUS:LOW_AMP_LIMIT` notification
-- [ ] Route incoming lines by prefix: `STATUS:` / `PROG:` / `SETTING:` / `LOG:` / CSV / ignore
+- [x] Ignore `Debug:` prefixed lines (firmware emits these; will be removed in future firmware)
+- [x] Handle expanded `run_state` values: `1=Paused`, `3=Overheat`, `5=Finished`, `90=Over Current`, `226=INA226 error`
+- [x] Handle async `STATUS:COOLING` notification (device-initiated, no command)
+- [x] Handle async `STATUS:LOW_AMP_LIMIT` notification
+- [x] Route incoming lines by prefix: `STATUS:` / `PROG:` / `SETTING:` / `LOG:` / CSV / ignore
 
 **Acceptance:** Parser handles all known line types without throwing errors or storing garbage.
+
+**Completed in v3.3** — Parser now routes all line types, STATUS handlers process ACKs/errors/async notifications, run_state tracked in UI state.
 
 ---
 

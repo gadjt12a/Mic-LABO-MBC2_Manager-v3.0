@@ -22,7 +22,7 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 ---
 
-## Current version: v3.2
+## Current version: v3.3
 
 See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 

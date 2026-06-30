@@ -764,14 +764,14 @@
       <div class="raw-toolbar">
         <button class="raw-pause-btn" id="rawPauseBtn" onclick="toggleRawPause()">⏸ Pause</button>
         <button class="raw-pause-btn" onclick="clearRawConsole()">✕ Clear</button>
-        <span style="color:var(--text3);">Showing last 200 lines &nbsp;·&nbsp; Highlighted cols: <span style="color:var(--accent3);">RPM[7]</span> &nbsp;<span style="color:var(--accent2);">AMPS[19]</span></span>
+        <span style="color:var(--text3);">Showing last 200 lines &nbsp;·&nbsp; Highlighted cols: <span style="color:var(--accent3);">RPM[7]</span> &nbsp;<span style="color:var(--accent2);">mA[13]</span></span>
         <span style="margin-left:auto;color:var(--text3);" id="rawLineCount">0 lines</span>
       </div>
       <div class="raw-col-header">
-        <span>[0]</span><span>[1]</span><span>[2]</span><span>[3]</span><span>[4]</span>
-        <span>[5]</span><span>[6]</span><span style="color:var(--accent3);">[7]RPM</span><span>[8]maxR</span><span>[9]</span>
-        <span>[10]</span><span>[11]duty</span><span>[12]dir</span><span>[13]</span><span>[14]ctr</span>
-        <span>[15]tgt</span><span>[16]</span><span>[17]</span><span>[18]temp</span><span class="amp-col">[19]AMPS</span>
+        <span>[0]prog</span><span>[1]name</span><span>[2]tgtR</span><span>[3]cyc</span><span>[4]maxC</span>
+        <span>[5]step</span><span>[6]state</span><span style="color:var(--accent3);">[7]RPM</span><span>[8]maxR</span><span>[9]kv</span>
+        <span>[10]mV</span><span>[11]setV</span><span>[12]dir</span><span class="amp-col">[13]mA</span><span>[14]elap</span>
+        <span>[15]tgt</span><span>[16]coolE</span><span>[17]coolS</span><span>[18]temp</span><span>[19]rot</span>
       </div>
       <div class="raw-console" id="rawConsole"></div>
     </div><!-- end panelRaw -->
@@ -937,8 +937,25 @@ let chartData = { rpm:[], amps:[], kv:[], temp:[], labels:[] };
 let state = {
   progNo:0, progName:'—', cycle:0, maxCycle:99, step:0,
   rpm:0, maxRpm:0, volts:0, amps:0, maxAmps:0, kv:0, maxKv:0,
-  temp:0, maxTemp:0, dir:'—', counter:0, target:0
+  temp:0, maxTemp:0, dir:'—', counter:0, target:0,
+  runState:0, runStateLabel:'Idle'
 };
+
+// run_state mapping from SERIAL_SPEC.md
+const RUN_STATE_MAP = {
+  0: 'Running',
+  1: 'Paused',
+  2: 'Cooling',
+  3: 'Overheat',
+  5: 'Finished',
+  90: 'Over Current',
+  226: 'INA226 Error'
+};
+
+// Bidirectional command/response state
+let pendingCommands = [];  // Queue of commands awaiting ACK
+let deviceSettings = {};   // Cached device settings from GET_SETTING
+let devicePrograms = {};   // Cached programs from GET_PROG
 
 // Cooldown tracking
 let cooldownActive = false;
@@ -1045,6 +1062,50 @@ async function disconnectSerial() {
   showToast('Disconnected');
 }
 
+// ═══════════════════════════════════════════════════════════════
+// SEND COMMAND TO DEVICE
+// ═══════════════════════════════════════════════════════════════
+let writer = null;
+
+async function sendCommand(cmd) {
+  if (!port || !port.writable) {
+    console.warn('[MBC2] Cannot send — port not writable');
+    showToast('Not connected', true);
+    return false;
+  }
+
+  try {
+    if (!writer) {
+      writer = port.writable.getWriter();
+    }
+
+    // Commands are terminated with \n (per SERIAL_SPEC.md)
+    const data = new TextEncoder().encode(cmd + '\n');
+    await writer.write(data);
+    console.log('[MBC2] Sent:', cmd);
+    return true;
+  } catch (e) {
+    console.error('[MBC2] Send error:', e);
+    showToast('Send failed: ' + e.message, true);
+    // Release writer on error so it can be re-acquired
+    if (writer) {
+      try { writer.releaseLock(); } catch(e2) {}
+      writer = null;
+    }
+    return false;
+  }
+}
+
+// Release writer when disconnecting
+const originalDisconnect = disconnectSerial;
+disconnectSerial = async function() {
+  if (writer) {
+    try { writer.releaseLock(); } catch(e) {}
+    writer = null;
+  }
+  await originalDisconnect();
+};
+
 async function startReadLoop() {
   console.log('[MBC2] startReadLoop called');
   console.log('[MBC2] port.readable:', port.readable);
@@ -1094,10 +1155,262 @@ async function startReadLoop() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PARSE
+// PARSE — Line router
 // ═══════════════════════════════════════════════════════════════
 function parseLine(line) {
+  // 1. Ignore Debug lines (firmware emits these, will be removed in future)
   if (line.startsWith('Debug:') || line.startsWith('DEBUG:')) return;
+
+  // 2. Route by prefix
+  if (line.startsWith('STATUS:')) {
+    handleStatusMessage(line);
+    return;
+  }
+  if (line.startsWith('PROG:')) {
+    handleProgMessage(line);
+    return;
+  }
+  if (line.startsWith('SETTING:')) {
+    handleSettingMessage(line);
+    return;
+  }
+  if (line.startsWith('LOG:')) {
+    handleLogMessage(line);
+    return;
+  }
+
+  // 3. Everything else with enough fields = CSV telemetry
+  parseCSVTelemetry(line);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATUS MESSAGE HANDLER
+// ═══════════════════════════════════════════════════════════════
+function handleStatusMessage(line) {
+  const payload = line.substring(7); // Remove 'STATUS:'
+  console.log('[MBC2] STATUS:', payload);
+
+  // Async notifications (device-initiated)
+  if (payload === 'COOLING') {
+    state.runState = 2;
+    state.runStateLabel = 'Cooling';
+    showToast('Device entered cooling state');
+    return;
+  }
+  if (payload === 'LOW_AMP_LIMIT') {
+    showToast('Warning: Low amp limit instability detected', true);
+    return;
+  }
+  if (payload === 'RUNNING') {
+    state.runState = 0;
+    state.runStateLabel = 'Running';
+    showToast('Device started');
+    return;
+  }
+  if (payload === 'STOPPED') {
+    state.runState = 5;
+    state.runStateLabel = 'Stopped';
+    showToast('Device stopped');
+    // Phase 3: Will trigger GET_LOG here
+    return;
+  }
+
+  // ACK responses: STATUS:OK:COMMAND:value
+  if (payload.startsWith('OK:')) {
+    handleStatusOK(payload.substring(3));
+    return;
+  }
+
+  // Error responses: STATUS:ERR:reason
+  if (payload.startsWith('ERR:')) {
+    handleStatusError(payload.substring(4));
+    return;
+  }
+}
+
+function handleStatusOK(ack) {
+  console.log('[MBC2] ACK:', ack);
+
+  // SET_VOLTAGE:v — ACK echoes actual clamped value
+  if (ack.startsWith('SET_VOLTAGE:')) {
+    const actualV = parseFloat(ack.substring(12));
+    console.log('[MBC2] Voltage set to:', actualV, 'V');
+    // Phase 2: Update UI with confirmed voltage
+    return;
+  }
+
+  // SET_CURRENT_LIMIT:a — ACK echoes actual clamped value
+  if (ack.startsWith('SET_CURRENT_LIMIT:')) {
+    const actualA = parseFloat(ack.substring(18));
+    console.log('[MBC2] Current limit set to:', actualA, 'A');
+    // Phase 2: Update UI with confirmed current limit
+    return;
+  }
+
+  // SET_DIRECTION:R/N
+  if (ack.startsWith('SET_DIRECTION:')) {
+    const dir = ack.substring(14);
+    console.log('[MBC2] Direction set to:', dir);
+    return;
+  }
+
+  // PAUSE
+  if (ack === 'PAUSE') {
+    state.runState = 1;
+    state.runStateLabel = 'Paused';
+    showToast('Paused');
+    return;
+  }
+
+  // RESUME
+  if (ack === 'RESUME') {
+    state.runState = 0;
+    state.runStateLabel = 'Running';
+    showToast('Resumed');
+    return;
+  }
+
+  // NEXT_STEP / NEXT_STEP:FINISHED
+  if (ack === 'NEXT_STEP') {
+    showToast('Skipped to next step');
+    return;
+  }
+  if (ack === 'NEXT_STEP:FINISHED') {
+    state.runState = 5;
+    state.runStateLabel = 'Finished';
+    showToast('Program finished');
+    return;
+  }
+
+  // SET_PROG:n
+  if (ack.startsWith('SET_PROG:')) {
+    const progNo = parseInt(ack.substring(9));
+    console.log('[MBC2] Program', progNo, 'written to RAM');
+    showToast('Program ' + progNo + ' updated (RAM only — not saved)');
+    return;
+  }
+
+  // SET_SETTING:key:value
+  if (ack.startsWith('SET_SETTING:')) {
+    const kv = ack.substring(12);
+    console.log('[MBC2] Setting updated:', kv);
+    showToast('Setting updated (RAM only — not saved)');
+    return;
+  }
+
+  // SAVE
+  if (ack === 'SAVE') {
+    showToast('Settings saved to EEPROM');
+    return;
+  }
+}
+
+function handleStatusError(err) {
+  console.warn('[MBC2] ERROR:', err);
+
+  const errorMessages = {
+    'FORMAT': 'Malformed command',
+    'PROG_NO': 'Invalid program number (must be 1-50)',
+    'COUNT': 'SET_PROG requires exactly 27 values',
+    'RANGE': 'Value out of allowed range',
+    'KEY': 'Unknown setting key',
+    'NOT_RUNNING': 'Cannot pause/skip — not running',
+    'ALREADY_PAUSED': 'Already paused',
+    'NOT_PAUSED': 'Cannot resume — not paused'
+  };
+
+  const msg = errorMessages[err] || ('Device error: ' + err);
+  showToast(msg, true);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROG MESSAGE HANDLER (GET_PROG response)
+// ═══════════════════════════════════════════════════════════════
+function handleProgMessage(line) {
+  // Format: PROG:n,name0,name1,name2,name3,cycle,rstop,target,v1,r1,t1,c1,...
+  const payload = line.substring(5); // Remove 'PROG:'
+  const parts = payload.split(',');
+
+  if (parts.length < 28) {
+    console.warn('[MBC2] Invalid PROG response, expected 28 values:', parts.length);
+    return;
+  }
+
+  const progNo = parseInt(parts[0]);
+  console.log('[MBC2] Received program', progNo);
+
+  // Phase 5: Will decode and store program here
+  // For now, just cache the raw response
+  devicePrograms[progNo] = {
+    raw: parts.slice(1),
+    receivedAt: Date.now()
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETTING MESSAGE HANDLER (GET_SETTING response)
+// ═══════════════════════════════════════════════════════════════
+function handleSettingMessage(line) {
+  // Format: SETTING:key:value
+  const payload = line.substring(8); // Remove 'SETTING:'
+  const colonIdx = payload.indexOf(':');
+
+  if (colonIdx === -1) {
+    console.warn('[MBC2] Invalid SETTING response:', payload);
+    return;
+  }
+
+  const key = payload.substring(0, colonIdx);
+  const value = parseInt(payload.substring(colonIdx + 1));
+
+  console.log('[MBC2] Setting:', key, '=', value);
+  deviceSettings[key] = value;
+
+  // Phase 6: Will update settings UI here
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOG MESSAGE HANDLER (GET_LOG response)
+// ═══════════════════════════════════════════════════════════════
+function handleLogMessage(line) {
+  // Formats:
+  //   LOG:HEAD,progno,lastcycle,rotate_total
+  //   LOG:STEP,cycle,step,lastrpm,maxrpm,kv,voltage,current_ma,direction,runtime_sec,cooltime_sec,temp,overheat
+  //   LOG:CYC,cycle,rotate_sum
+  //   LOG:END
+
+  const payload = line.substring(4); // Remove 'LOG:'
+
+  if (payload === 'END') {
+    console.log('[MBC2] Log retrieval complete');
+    // Phase 3: Will finalize log storage here
+    return;
+  }
+
+  if (payload.startsWith('HEAD,')) {
+    const parts = payload.substring(5).split(',');
+    console.log('[MBC2] Log header: progNo=' + parts[0] + ', lastCycle=' + parts[1]);
+    return;
+  }
+
+  if (payload.startsWith('STEP,')) {
+    const parts = payload.substring(5).split(',');
+    console.log('[MBC2] Log step: cycle=' + parts[0] + ', step=' + parts[1] + ', rpm=' + (parseInt(parts[2]) * 10));
+    // Phase 3: Will accumulate step data here
+    return;
+  }
+
+  if (payload.startsWith('CYC,')) {
+    const parts = payload.substring(4).split(',');
+    console.log('[MBC2] Log cycle: cycle=' + parts[0] + ', rotations=' + parts[1]);
+    return;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CSV TELEMETRY PARSER
+// ═══════════════════════════════════════════════════════════════
+function parseCSVTelemetry(line) {
   const parts = line.split(',');
   if (parts.length < 18) return;
 
@@ -1108,17 +1421,29 @@ function parseLine(line) {
 
   state.progNo   = parseInt(parts[0]) || 0;
   state.progName = parts[1] ? parts[1].trim() : '—';
+  // parts[2] = target_rpm (actual RPM value)
   state.cycle    = parseInt(parts[3]) || 0;
   state.maxCycle = parseInt(parts[4]) || 99;
   state.step     = parseInt(parts[5]) || 0;
-  state.rpm      = parseInt(parts[7]) || 0;
-  state.maxRpm   = parseInt(parts[8]) || 0;
-  const rawDuty  = parseInt(parts[11]) || 0;
+
+  // run_state — track device state
+  const runStateCode = parseInt(parts[6]) || 0;
+  state.runState = runStateCode;
+  state.runStateLabel = RUN_STATE_MAP[runStateCode] || 'Unknown';
+
+  state.rpm      = parseInt(parts[7]) || 0;  // Already actual RPM (firmware does ×10)
+  state.maxRpm   = parseInt(parts[8]) || 0;  // Already actual RPM
+  // parts[9] = kv
+  // parts[10] = voltage_mv
+  const rawDuty  = parseInt(parts[11]) || 0; // set_voltage_mv
   const dirCode  = parseInt(parts[12]) || 0;
-  state.counter  = parseInt(parts[14]) || 0;
-  state.target   = parseInt(parts[15]) || 0;
+  state.amps     = (parseInt(parts[13]) || 0) / 1000; // col[13] = current_ma
+  state.counter  = parseInt(parts[14]) || 0; // elapsed_sec
+  state.target   = parseInt(parts[15]) || 0; // set_runtime_sec
+  // parts[16] = cool_elapsed_sec
+  // parts[17] = cool_set_sec
   state.temp     = parseInt(parts[18]) || 0;
-  state.amps     = (parseInt(parts[13]) || 0) / 1000; // col[13]/1000 = amps (confirmed)
+  // parts[19] = total_rotations (NOT charge — it's rotation count)
 
   const dirMap = { 0:'—', 1:'N', 2:'R', 3:'NP', 4:'RP' };
   state.dir = dirMap[dirCode] || '—';
@@ -2282,11 +2607,11 @@ function addRawLine(line) {
   const div = document.createElement('div');
   div.className = 'raw-line';
 
-  // Render each column, highlight col[7]=RPM and col[19]=AMPS
+  // Render each column, highlight col[7]=RPM and col[13]=current_ma
   const cols = parts.map((v, i) => {
     let cls = 'raw-col';
-    if (i === 7)  cls += ' highlight';
-    if (i === 19) cls += ' amp-col';
+    if (i === 7)  cls += ' highlight';   // RPM
+    if (i === 13) cls += ' amp-col';     // current_ma
     return `<span class="${cls}">${v.trim()}</span>`;
   }).join('');
   div.innerHTML = cols;

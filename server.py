@@ -24,11 +24,7 @@ BASE_DIR       = Path(__file__).parent
 DASHBOARD_HTML = BASE_DIR / 'mbc2-dashboard.html'
 
 # Seed file for first-run program import
-_seed_candidates = [
-    BASE_DIR / 'default_programs.json',
-    BASE_DIR / 'seed_programs.json',
-]
-SEED_JSON = next((p for p in _seed_candidates if p.exists()), None)
+SEED_JSON = BASE_DIR / 'default_programs.json'
 
 PORT = 8766
 

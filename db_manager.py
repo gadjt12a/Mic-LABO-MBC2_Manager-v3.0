@@ -313,39 +313,6 @@ def parse_mbc2_row(raw_line: str, session_id: int, timestamp_ms: int):
 # BENCHMARKS
 # ============================================================
 
-def record_benchmark(session_id: int, motor_id: int, benchmark_type: str,
-                     direction: str, data_rows: list, notes: str = None) -> int:
-    """
-    Calculate and store benchmark summary from session data rows.
-    benchmark_type: 'Pre', 'Post', or 'Periodic'
-    Returns benchmark_id.
-    """
-    rpms = [r['rpm'] for r in data_rows if r.get('rpm') and r['rpm'] > 0]
-    currents = [r['current_ma'] for r in data_rows if r.get('current_ma')]
-    temps = [r['temp_c'] for r in data_rows if r.get('temp_c')]
-
-    peak_rpm = max(rpms) if rpms else None
-    avg_rpm = int(sum(rpms) / len(rpms)) if rpms else None
-    peak_current = max(currents) if currents else None
-    avg_current = int(sum(currents) / len(currents)) if currents else None
-    peak_temp = max(temps) if temps else None
-    final_temp = temps[-1] if temps else None
-
-    with get_connection() as conn:
-        cursor = conn.execute("""
-            INSERT INTO benchmarks 
-            (session_id, motor_id, benchmark_type, voltage_v, direction,
-             duration_sec, peak_rpm, avg_rpm, peak_current_ma, avg_current_ma,
-             peak_temp_c, final_temp_c, notes)
-            VALUES (?, ?, ?, 3.0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (session_id, motor_id, benchmark_type, direction,
-              len(data_rows),  # duration as row count for now
-              peak_rpm, avg_rpm, peak_current, avg_current,
-              peak_temp, final_temp, notes))
-        conn.commit()
-        return cursor.lastrowid
-
-
 def get_motor_benchmarks(motor_id: int) -> list:
     """Get all benchmarks for a motor in chronological order."""
     with get_connection() as conn:
@@ -355,31 +322,6 @@ def get_motor_benchmarks(motor_id: int) -> list:
             ORDER BY session_date
         """, (motor_id,)).fetchall()
         return [dict(r) for r in rows]
-
-
-def compare_benchmarks(motor_id: int) -> dict:
-    """
-    Compare Pre vs Post benchmark for a motor.
-    Returns dict with delta values.
-    """
-    benchmarks = get_motor_benchmarks(motor_id)
-    pre = next((b for b in benchmarks if b['benchmark_type'] == 'Pre'), None)
-    post = next((b for b in reversed(benchmarks) if b['benchmark_type'] == 'Post'), None)
-
-    if not pre or not post:
-        return {'error': 'Need both Pre and Post benchmarks to compare'}
-
-    return {
-        'motor_identifier': pre['identifier'],
-        'pre': pre,
-        'post': post,
-        'delta': {
-            'peak_rpm': (post['peak_rpm'] or 0) - (pre['peak_rpm'] or 0),
-            'avg_rpm': (post['avg_rpm'] or 0) - (pre['avg_rpm'] or 0),
-            'peak_current_ma': (post['peak_current_ma'] or 0) - (pre['peak_current_ma'] or 0),
-            'peak_temp_c': (post['peak_temp_c'] or 0) - (pre['peak_temp_c'] or 0),
-        }
-    }
 
 
 # ============================================================
@@ -395,19 +337,6 @@ def get_all_motor_models() -> list:
         return [dict(r) for r in rows]
 
 
-def get_chassis_for_direction(direction: str) -> list:
-    """Get chassis compatible with a given break-in direction."""
-    with get_connection() as conn:
-        rows = conn.execute("""
-            SELECT c.*, mt.name as mount_type, mt.default_direction
-            FROM chassis c
-            JOIN mount_types mt ON c.mount_type_id = mt.mount_type_id
-            WHERE mt.default_direction = ? OR mt.default_direction IS NULL
-            ORDER BY mt.name, c.name
-        """, (direction,)).fetchall()
-        return [dict(r) for r in rows]
-
-
 def get_chassis_for_shaft_type(shaft_type: str) -> list:
     """Get chassis compatible with a given shaft type (Single/Dual)."""
     with get_connection() as conn:
@@ -419,22 +348,6 @@ def get_chassis_for_shaft_type(shaft_type: str) -> list:
             ORDER BY mt.name, c.name
         """, (shaft_type,)).fetchall()
         return [dict(r) for r in rows]
-
-
-def update_mount_direction(mount_type_name: str, direction: str):
-    """
-    Update the confirmed break-in direction for a mount type.
-    Call this once Kris has confirmed Rear and Midship directions.
-    """
-    with get_connection() as conn:
-        conn.execute(
-            "UPDATE mount_types SET default_direction = ? WHERE name = ?",
-            (direction, mount_type_name)
-        )
-        conn.commit()
-        print(f"Updated {mount_type_name} mount direction to: {direction}")
-
-
 
 
 def get_motor_benchmark_trend(motor_id: int) -> dict:
@@ -592,26 +505,6 @@ def record_benchmark_from_session(session_id: int, motor_id: int,
               peak_temp_c, final_temp_c, notes))
         conn.commit()
         return cursor.lastrowid
-
-
-# ============================================================
-# JSON MIGRATION
-# ============================================================
-
-def migrate_from_json(json_path: str):
-    """
-    Migrate existing session data from JSON file to SQLite.
-    Expects the JSON structure from the existing dashboard.
-    """
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-
-    print(f"Migrating {len(data)} records from {json_path}")
-    # TODO: implement once we know the exact JSON structure
-    # This is a placeholder - will be built out when the JSON schema is confirmed
-    print("Migration placeholder - implement after confirming JSON structure")
-
-
 
 
 # ============================================================

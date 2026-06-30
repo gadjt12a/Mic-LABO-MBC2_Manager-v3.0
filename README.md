@@ -70,7 +70,6 @@ MBC2_Dashboard/
 ├── schema.sql                   ← SQLite schema (applied automatically on first run)
 ├── mbc2.db                      ← single database for all app data (created on first run)
 ├── default_programs.json        ← break-in profiles seeded into DB on first run
-├── seed_programs.json           ← additional profiles seeded into DB on first run
 ├── START MBC2 DASHBOARD.bat     ← Windows launcher
 ├── Start MBC2 Dashboard.command ← Mac launcher
 ├── CLAUDE.md                    ← Claude Code project context

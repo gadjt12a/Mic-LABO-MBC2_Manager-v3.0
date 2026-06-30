@@ -903,6 +903,8 @@
       </div>
       <div class="cycle-bar-track"><div class="cycle-bar-fill" id="cycleBar" style="width:0%"></div></div>
     </div>
+    <!-- Device Run Log (populated after GET_LOG) -->
+    <div class="prog-section" id="deviceLogContainer" style="display:none;"></div>
     <div class="prog-section" style="flex:1;overflow-y:auto;">
       <div class="chart-label">Sessions</div>
       <div class="session-list" id="sessionList">
@@ -1230,6 +1232,10 @@ function updateRunStateIndicator() {
 
 // START (MANU mode)
 async function deviceStart() {
+  // Auto-start recording session if not already recording
+  if (!recording && port) {
+    startRecording();
+  }
   await sendCommand('START');
 }
 
@@ -1240,12 +1246,20 @@ async function deviceStartProg() {
     showToast('Program number must be 1-50', true);
     return;
   }
+  // Auto-start recording session if not already recording
+  if (!recording && port) {
+    startRecording();
+  }
   await sendCommand('START_PROG:' + progNo);
 }
 
 // STOP
 async function deviceStop() {
   await sendCommand('STOP');
+  // Auto-stop recording when device stops
+  if (recording) {
+    stopRecording();
+  }
 }
 
 // PAUSE
@@ -1445,7 +1459,8 @@ function handleStatusMessage(line) {
     state.runState = 5;
     state.runStateLabel = 'Stopped';
     showToast('Device stopped');
-    // Phase 3: Will trigger GET_LOG here
+    // Automatically request run log from device
+    requestDeviceLog();
     return;
   }
 
@@ -1606,6 +1621,31 @@ function handleSettingMessage(line) {
 // ═══════════════════════════════════════════════════════════════
 // LOG MESSAGE HANDLER (GET_LOG response)
 // ═══════════════════════════════════════════════════════════════
+
+// Accumulator for incoming log data
+let deviceLog = {
+  collecting: false,
+  header: null,
+  steps: [],
+  cycles: []
+};
+
+function resetDeviceLog() {
+  deviceLog = {
+    collecting: false,
+    header: null,
+    steps: [],
+    cycles: []
+  };
+}
+
+async function requestDeviceLog() {
+  resetDeviceLog();
+  deviceLog.collecting = true;
+  console.log('[MBC2] Requesting device log...');
+  await sendCommand('GET_LOG');
+}
+
 function handleLogMessage(line) {
   // Formats:
   //   LOG:HEAD,progno,lastcycle,rotate_total
@@ -1617,28 +1657,121 @@ function handleLogMessage(line) {
 
   if (payload === 'END') {
     console.log('[MBC2] Log retrieval complete');
-    // Phase 3: Will finalize log storage here
+    finalizeDeviceLog();
     return;
   }
 
   if (payload.startsWith('HEAD,')) {
     const parts = payload.substring(5).split(',');
-    console.log('[MBC2] Log header: progNo=' + parts[0] + ', lastCycle=' + parts[1]);
+    deviceLog.header = {
+      progNo: parseInt(parts[0]) || 0,
+      lastCycle: parseInt(parts[1]) || 0,
+      rotateTotal: parseInt(parts[2]) || 0
+    };
+    console.log('[MBC2] Log header:', deviceLog.header);
     return;
   }
 
   if (payload.startsWith('STEP,')) {
     const parts = payload.substring(5).split(',');
-    console.log('[MBC2] Log step: cycle=' + parts[0] + ', step=' + parts[1] + ', rpm=' + (parseInt(parts[2]) * 10));
-    // Phase 3: Will accumulate step data here
+    // LOG:STEP,cycle,step,lastrpm,maxrpm,kv,voltage,current_ma,direction,runtime_sec,cooltime_sec,temp,overheat
+    const stepData = {
+      cycle: parseInt(parts[0]) || 0,
+      step: parseInt(parts[1]) || 0,
+      lastRpm: (parseInt(parts[2]) || 0) * 10,    // Internal value × 10 = actual RPM
+      maxRpm: (parseInt(parts[3]) || 0) * 10,     // Internal value × 10 = actual RPM
+      kv: parseInt(parts[4]) || 0,
+      voltage: (parseInt(parts[5]) || 0) * 0.1,   // Internal × 0.1 = V (different from CSV mV!)
+      currentMa: parseInt(parts[6]) || 0,
+      direction: parseInt(parts[7]) || 0,
+      runtimeSec: parseInt(parts[8]) || 0,
+      cooltimeSec: parseInt(parts[9]) || 0,
+      temp: parseInt(parts[10]) || 0,
+      overheat: parseInt(parts[11]) === 1
+    };
+    deviceLog.steps.push(stepData);
+    console.log('[MBC2] Log step:', stepData);
     return;
   }
 
   if (payload.startsWith('CYC,')) {
     const parts = payload.substring(4).split(',');
-    console.log('[MBC2] Log cycle: cycle=' + parts[0] + ', rotations=' + parts[1]);
+    const cycleData = {
+      cycle: parseInt(parts[0]) || 0,
+      rotateSum: parseInt(parts[1]) || 0
+    };
+    deviceLog.cycles.push(cycleData);
+    console.log('[MBC2] Log cycle:', cycleData);
     return;
   }
+}
+
+function finalizeDeviceLog() {
+  deviceLog.collecting = false;
+
+  if (!deviceLog.header && deviceLog.steps.length === 0) {
+    console.log('[MBC2] No log data received');
+    return;
+  }
+
+  console.log('[MBC2] Device log complete:', {
+    header: deviceLog.header,
+    steps: deviceLog.steps.length,
+    cycles: deviceLog.cycles.length
+  });
+
+  // Display log summary in UI
+  displayDeviceLogSummary(deviceLog);
+
+  showToast('Run log retrieved: ' + deviceLog.steps.length + ' steps');
+}
+
+function displayDeviceLogSummary(log) {
+  const container = document.getElementById('deviceLogContainer');
+  if (!container) return;
+
+  if (!log.steps || log.steps.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  // Build summary HTML
+  let html = '<div class="chart-label">Device Run Log</div>';
+
+  if (log.header) {
+    html += '<div style="color:var(--text2);font-size:10px;margin:4px 0;">Program #' + log.header.progNo + ' · ' + log.header.lastCycle + ' cycles · ' + log.header.rotateTotal + ' rotations</div>';
+  }
+
+  html += '<div style="max-height:150px;overflow-y:auto;">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:10px;">';
+  html += '<tr style="color:var(--text3);position:sticky;top:0;background:var(--bg2);"><th style="text-align:left;padding:2px 4px;">Cyc</th><th>Step</th><th>RPM</th><th>Max</th><th>V</th><th>mA</th><th>°C</th></tr>';
+
+  for (const s of log.steps) {
+    const rowStyle = s.overheat ? ' style="color:var(--danger);"' : '';
+    html += '<tr' + rowStyle + '>';
+    html += '<td style="padding:2px 4px;">' + s.cycle + '</td>';
+    html += '<td style="text-align:center;">' + s.step + '</td>';
+    html += '<td style="text-align:right;color:var(--accent3);">' + s.lastRpm.toLocaleString() + '</td>';
+    html += '<td style="text-align:right;">' + s.maxRpm.toLocaleString() + '</td>';
+    html += '<td style="text-align:right;">' + s.voltage.toFixed(1) + '</td>';
+    html += '<td style="text-align:right;color:var(--accent2);">' + s.currentMa + '</td>';
+    html += '<td style="text-align:right;">' + s.temp + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</table></div>';
+
+  container.innerHTML = html;
+  container.style.display = 'block';
+}
+
+function clearDeviceLog() {
+  const container = document.getElementById('deviceLogContainer');
+  if (container) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+  }
+  resetDeviceLog();
 }
 
 // ═══════════════════════════════════════════════════════════════

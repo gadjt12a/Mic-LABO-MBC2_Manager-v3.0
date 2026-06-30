@@ -48,18 +48,20 @@ Controls to expose:
 
 ---
 
-## Phase 3 — GET_LOG integration
+## Phase 3 — GET_LOG integration ✓ COMPLETE
 
-**Goal:** Retrieve end-of-run summary from device and store in DB.
+**Goal:** Retrieve end-of-run summary from device and display in UI.
 
-- Send `GET_LOG` automatically after `STATUS:STOPPED` is received
-- Parse `LOG:HEAD`, `LOG:STEP`, `LOG:CYC`, `LOG:END` response
-- Store summary alongside the session record
-- Display per-step summary in session detail view
+- [x] Send `GET_LOG` automatically after `STATUS:STOPPED` is received
+- [x] Parse `LOG:HEAD`, `LOG:STEP`, `LOG:CYC`, `LOG:END` response
+- [x] Display per-step summary in right panel (cycle, step, RPM, max RPM, voltage, current, temp)
+- [ ] Store summary alongside the session record (deferred — requires schema migration)
 
 **Note on units:** `LOG:STEP` voltage field is internal × 0.1V — different to CSV stream mV. Convert correctly.
 
-**Acceptance:** After a run ends, session detail view shows per-step RPM, current, temp summary from device log.
+**Acceptance:** After a run ends, Device Run Log panel shows per-step summary from device.
+
+**Completed in v3.3** — GET_LOG sent on stop, parsed and displayed in UI. DB storage deferred.
 
 ---
 

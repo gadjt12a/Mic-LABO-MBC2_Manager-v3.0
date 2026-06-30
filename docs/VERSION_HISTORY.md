@@ -20,6 +20,13 @@
 - Direction toggle (R/N) with R visually emphasised
 - Run state indicator showing device status
 
+- **Phase 3: GET_LOG integration** — automatic run log retrieval
+- GET_LOG sent automatically when device stops
+- Parses LOG:HEAD, LOG:STEP, LOG:CYC, LOG:END responses
+- Accumulates step data with proper unit conversions (RPM × 10, voltage × 0.1)
+- Displays per-step summary table in right panel (cycle, step, RPM, max, V, mA, °C)
+- Overheat steps highlighted in red
+
 ## v3.2
 
 - Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions

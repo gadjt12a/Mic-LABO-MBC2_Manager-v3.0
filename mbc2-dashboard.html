@@ -794,6 +794,76 @@
       <div class="active-motor-id" id="activeMotorId" style="display:none"></div>
       <div class="active-motor-name" id="activeMotorName"></div>
     </div>
+
+    <!-- DEVICE CONTROL PANEL -->
+    <div class="prog-section" id="deviceControlPanel">
+      <div class="chart-label">Device Control <span id="runStateIndicator" style="margin-left:8px;font-size:9px;color:var(--text3);">IDLE</span></div>
+
+      <!-- Run controls -->
+      <div style="display:flex;gap:4px;margin-top:6px;">
+        <button class="btn success" id="btnDeviceStart" onclick="deviceStart()" disabled style="flex:1;padding:6px 8px;font-size:10px;">▶ START</button>
+        <button class="btn danger" id="btnDeviceStop" onclick="deviceStop()" disabled style="flex:1;padding:6px 8px;font-size:10px;">■ STOP</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <button class="btn" id="btnDevicePause" onclick="devicePause()" disabled style="flex:1;padding:6px 8px;font-size:10px;">⏸ PAUSE</button>
+        <button class="btn" id="btnDeviceNextStep" onclick="deviceNextStep()" disabled style="flex:1;padding:6px 8px;font-size:10px;">⏭ NEXT</button>
+      </div>
+
+      <!-- Voltage control -->
+      <div style="margin-top:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="prog-detail-label">VOLTAGE</span>
+          <span id="voltageConfirmed" style="font-size:10px;color:var(--accent3);">—</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+          <input type="range" id="voltageSlider" min="0" max="9.0" step="0.1" value="3.0"
+                 style="flex:1;accent-color:var(--accent);" onchange="onVoltageSliderChange()" oninput="onVoltageSliderInput()">
+          <input type="number" id="voltageInput" min="0" max="9.0" step="0.1" value="3.0"
+                 style="width:50px;font-family:var(--mono);font-size:11px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;"
+                 onchange="onVoltageInputChange()">
+          <span style="font-size:11px;color:var(--text2);">V</span>
+        </div>
+      </div>
+
+      <!-- Current limit control -->
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="prog-detail-label">CURRENT LIMIT</span>
+          <span id="currentLimitConfirmed" style="font-size:10px;color:var(--accent3);">—</span>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+          <input type="number" id="currentLimitInput" min="0" max="4.5" step="0.1" value="0"
+                 style="width:50px;font-family:var(--mono);font-size:11px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;"
+                 onchange="onCurrentLimitChange()">
+          <span style="font-size:11px;color:var(--text2);">A (0=OFF)</span>
+          <button class="btn" onclick="sendCurrentLimit()" disabled id="btnSendCurrentLimit"
+                  style="margin-left:auto;padding:3px 8px;font-size:9px;">SET</button>
+        </div>
+      </div>
+
+      <!-- Direction control -->
+      <div style="margin-top:6px;">
+        <div class="prog-detail-label">DIRECTION</div>
+        <div style="display:flex;gap:4px;margin-top:3px;">
+          <button class="btn" id="btnDirR" onclick="setDirection('R')" disabled
+                  style="flex:1;padding:5px 8px;font-size:11px;border-color:var(--accent2);color:var(--accent2);">R (Reverse)</button>
+          <button class="btn" id="btnDirN" onclick="setDirection('N')" disabled
+                  style="flex:1;padding:5px 8px;font-size:11px;opacity:0.5;">N (Normal)</button>
+        </div>
+      </div>
+
+      <!-- Program selector for START_PROG -->
+      <div style="margin-top:6px;">
+        <div class="prog-detail-label">START PROGRAM #</div>
+        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+          <input type="number" id="startProgNo" min="1" max="50" value="1"
+                 style="width:50px;font-family:var(--mono);font-size:11px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">
+          <button class="btn primary" id="btnStartProg" onclick="deviceStartProg()" disabled
+                  style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
+        </div>
+      </div>
+    </div>
+
     <div class="prog-section">
       <div class="chart-label">Break-in Program</div>
       <select class="prog-selector" id="progSelector" onchange="onProgSelectorChange()">
@@ -1030,6 +1100,7 @@ async function connectSerial() {
     document.getElementById('btnConnect').disabled = true;
     document.getElementById('btnDisconnect').disabled = false;
     document.getElementById('btnRecord').disabled = false;
+    updateDeviceControlButtons(true);
     showToast('MBC2 Connected');
     requestWakeLock();
     startReadLoop();
@@ -1103,8 +1174,171 @@ disconnectSerial = async function() {
     try { writer.releaseLock(); } catch(e) {}
     writer = null;
   }
+  updateDeviceControlButtons(false);
   await originalDisconnect();
 };
+
+// ═══════════════════════════════════════════════════════════════
+// DEVICE CONTROL PANEL
+// ═══════════════════════════════════════════════════════════════
+
+// Track confirmed values from device ACKs
+let confirmedVoltage = null;
+let confirmedCurrentLimit = null;
+
+function updateDeviceControlButtons(connected) {
+  const btns = ['btnDeviceStart', 'btnDeviceStop', 'btnDevicePause', 'btnDeviceNextStep',
+                'btnDirR', 'btnDirN', 'btnStartProg', 'btnSendCurrentLimit'];
+  btns.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !connected;
+  });
+}
+
+function updateRunStateIndicator() {
+  const el = document.getElementById('runStateIndicator');
+  if (!el) return;
+
+  const label = state.runStateLabel || 'Idle';
+  el.textContent = label.toUpperCase();
+
+  // Color based on state
+  if (state.runState === 0) {
+    el.style.color = 'var(--accent3)';  // Running = green
+  } else if (state.runState === 1) {
+    el.style.color = 'var(--warn)';     // Paused = yellow
+  } else if (state.runState === 2) {
+    el.style.color = 'var(--accent)';   // Cooling = cyan
+  } else if (state.runState === 3 || state.runState === 90) {
+    el.style.color = 'var(--danger)';   // Overheat/Overcurrent = red
+  } else {
+    el.style.color = 'var(--text3)';    // Idle/other = grey
+  }
+
+  // Update PAUSE button text based on state
+  const pauseBtn = document.getElementById('btnDevicePause');
+  if (pauseBtn) {
+    if (state.runState === 1) {
+      pauseBtn.textContent = '▶ RESUME';
+      pauseBtn.onclick = deviceResume;
+    } else {
+      pauseBtn.textContent = '⏸ PAUSE';
+      pauseBtn.onclick = devicePause;
+    }
+  }
+}
+
+// START (MANU mode)
+async function deviceStart() {
+  await sendCommand('START');
+}
+
+// START_PROG:n
+async function deviceStartProg() {
+  const progNo = parseInt(document.getElementById('startProgNo').value);
+  if (progNo < 1 || progNo > 50) {
+    showToast('Program number must be 1-50', true);
+    return;
+  }
+  await sendCommand('START_PROG:' + progNo);
+}
+
+// STOP
+async function deviceStop() {
+  await sendCommand('STOP');
+}
+
+// PAUSE
+async function devicePause() {
+  await sendCommand('PAUSE');
+}
+
+// RESUME
+async function deviceResume() {
+  await sendCommand('RESUME');
+}
+
+// NEXT_STEP (with confirmation)
+async function deviceNextStep() {
+  if (!confirm('Skip to next step? This cannot be undone.')) return;
+  await sendCommand('NEXT_STEP');
+}
+
+// SET_VOLTAGE
+let voltageDebounceTimer = null;
+
+function onVoltageSliderInput() {
+  // Live update the number input while sliding
+  const v = parseFloat(document.getElementById('voltageSlider').value);
+  document.getElementById('voltageInput').value = v.toFixed(1);
+}
+
+function onVoltageSliderChange() {
+  const v = parseFloat(document.getElementById('voltageSlider').value);
+  document.getElementById('voltageInput').value = v.toFixed(1);
+  debouncedSendVoltage(v);
+}
+
+function onVoltageInputChange() {
+  let v = parseFloat(document.getElementById('voltageInput').value);
+  if (isNaN(v)) v = 0;
+  v = Math.max(0, Math.min(9.0, v));
+  document.getElementById('voltageInput').value = v.toFixed(1);
+  document.getElementById('voltageSlider').value = v;
+  debouncedSendVoltage(v);
+}
+
+function debouncedSendVoltage(v) {
+  if (voltageDebounceTimer) clearTimeout(voltageDebounceTimer);
+  voltageDebounceTimer = setTimeout(() => sendVoltage(v), 300);
+}
+
+async function sendVoltage(v) {
+  if (!port) return;
+  await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
+}
+
+// SET_CURRENT_LIMIT
+function onCurrentLimitChange() {
+  let a = parseFloat(document.getElementById('currentLimitInput').value);
+  if (isNaN(a)) a = 0;
+  a = Math.max(0, Math.min(4.5, a));
+  document.getElementById('currentLimitInput').value = a.toFixed(1);
+}
+
+async function sendCurrentLimit() {
+  const a = parseFloat(document.getElementById('currentLimitInput').value) || 0;
+  await sendCommand('SET_CURRENT_LIMIT:' + a.toFixed(1));
+}
+
+// SET_DIRECTION
+async function setDirection(dir) {
+  if (dir !== 'R' && dir !== 'N') return;
+  await sendCommand('SET_DIRECTION:' + dir);
+
+  // Visual feedback (actual confirmation comes from ACK)
+  document.getElementById('btnDirR').style.opacity = dir === 'R' ? '1' : '0.5';
+  document.getElementById('btnDirN').style.opacity = dir === 'N' ? '1' : '0.5';
+}
+
+// Update confirmed values display (called from STATUS:OK handlers)
+function updateConfirmedVoltage(v) {
+  confirmedVoltage = v;
+  const el = document.getElementById('voltageConfirmed');
+  if (el) el.textContent = 'Confirmed: ' + v.toFixed(1) + 'V';
+}
+
+function updateConfirmedCurrentLimit(a) {
+  confirmedCurrentLimit = a;
+  const el = document.getElementById('currentLimitConfirmed');
+  if (el) {
+    if (a === 0) {
+      el.textContent = 'OFF';
+    } else {
+      el.textContent = 'Confirmed: ' + a.toFixed(1) + 'A';
+    }
+  }
+}
 
 async function startReadLoop() {
   console.log('[MBC2] startReadLoop called');
@@ -1235,7 +1469,7 @@ function handleStatusOK(ack) {
   if (ack.startsWith('SET_VOLTAGE:')) {
     const actualV = parseFloat(ack.substring(12));
     console.log('[MBC2] Voltage set to:', actualV, 'V');
-    // Phase 2: Update UI with confirmed voltage
+    updateConfirmedVoltage(actualV);
     return;
   }
 
@@ -1243,7 +1477,7 @@ function handleStatusOK(ack) {
   if (ack.startsWith('SET_CURRENT_LIMIT:')) {
     const actualA = parseFloat(ack.substring(18));
     console.log('[MBC2] Current limit set to:', actualA, 'A');
-    // Phase 2: Update UI with confirmed current limit
+    updateConfirmedCurrentLimit(actualA);
     return;
   }
 
@@ -1454,7 +1688,7 @@ function parseCSVTelemetry(line) {
   if (state.kv   > state.maxKv)   state.maxKv   = state.kv;
   if (state.temp > state.maxTemp && state.temp > -270) state.maxTemp = state.temp;
 
-  updateMetrics(); updateProgram(); updateCharts();
+  updateMetrics(); updateProgram(); updateCharts(); updateRunStateIndicator();
 
   // Collect benchmark data if benchmark mode is active
   if (benchmarkMode) {

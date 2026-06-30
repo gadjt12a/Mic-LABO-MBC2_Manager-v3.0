@@ -22,27 +22,29 @@ Work through these in sequence. Do not jump ahead — each builds on the previou
 
 ---
 
-## Phase 2 — Manual Run panel
+## Phase 2 — Manual Run panel ✓ COMPLETE
 
 **Goal:** Basic bidirectional control from the dashboard.
 
 Controls to expose:
-- `START` (MANU mode)
-- `START_PROG:n` (launch saved program by number)
-- `STOP`
-- `PAUSE` / `RESUME` (with state awareness — show correct button for current state)
-- `NEXT_STEP` (with confirmation prompt — this is destructive to the current step)
-- `SET_VOLTAGE:v` (with ACK feedback — display actual applied voltage from response)
-- `SET_CURRENT_LIMIT:a` (with ACK feedback — display actual applied limit from response; 0=OFF)
-- `SET_DIRECTION:R/N` (default R, rarely changed)
+- [x] `START` (MANU mode)
+- [x] `START_PROG:n` (launch saved program by number)
+- [x] `STOP`
+- [x] `PAUSE` / `RESUME` (with state awareness — show correct button for current state)
+- [x] `NEXT_STEP` (with confirmation prompt — this is destructive to the current step)
+- [x] `SET_VOLTAGE:v` (with ACK feedback — display actual applied voltage from response)
+- [x] `SET_CURRENT_LIMIT:a` (with ACK feedback — display actual applied limit from response; 0=OFF)
+- [x] `SET_DIRECTION:R/N` (default R, rarely changed)
 
 **UI rules:**
-- PAUSE and RESUME are mutually exclusive — show only the relevant one based on `run_state` from CSV stream
-- NEXT_STEP must have a confirmation step — it cannot be undone
-- Display the ACK-confirmed voltage and current limit, not the requested values
-- `SET_DIRECTION:N` should be visually de-emphasised (R is correct for all racing use)
+- [x] PAUSE and RESUME are mutually exclusive — show only the relevant one based on `run_state` from CSV stream
+- [x] NEXT_STEP must have a confirmation step — it cannot be undone
+- [x] Display the ACK-confirmed voltage and current limit, not the requested values
+- [x] `SET_DIRECTION:N` should be visually de-emphasised (R is correct for all racing use)
 
 **Acceptance:** Can start, pause, resume, stop a run and adjust voltage/current from the browser.
+
+**Completed in v3.3** — Device Control panel added to right sidebar with all controls.
 
 ---
 

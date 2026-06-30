@@ -10,6 +10,16 @@
 - Fixed raw data column labels (col[13] is current_ma, not col[19])
 - Debug lines now properly ignored at parser entry point
 
+- **Phase 2: Device Control panel** — bidirectional control from the dashboard
+- START/STOP buttons for MANU mode
+- START PROG button with program number selector (1-50)
+- PAUSE/RESUME button (context-aware based on run_state)
+- NEXT STEP button with confirmation dialog
+- Voltage slider and input with ACK-confirmed value display
+- Current limit input with SET button and ACK confirmation
+- Direction toggle (R/N) with R visually emphasised
+- Run state indicator showing device status
+
 ## v3.2
 
 - Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions

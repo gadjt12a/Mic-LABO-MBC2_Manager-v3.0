@@ -862,6 +862,27 @@
                   style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
         </div>
       </div>
+
+      <!-- Program Sync -->
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div class="prog-detail-label">PROGRAM SYNC</div>
+        <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
+          <input type="number" id="syncProgNo" min="1" max="50" value="1"
+                 style="width:50px;font-family:var(--mono);font-size:11px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">
+          <button class="btn" id="btnGetProg" onclick="onGetProgClick()" disabled
+                  style="flex:1;padding:5px 8px;font-size:10px;">⬇ READ</button>
+          <button class="btn" id="btnSetProg" onclick="onSetProgClick()" disabled
+                  style="flex:1;padding:5px 8px;font-size:10px;">⬆ WRITE</button>
+        </div>
+        <div id="syncProgDisplay" style="margin-top:4px;font-size:10px;color:var(--text3);"></div>
+      </div>
+
+      <!-- SAVE to EEPROM -->
+      <div style="margin-top:6px;">
+        <button class="btn danger" id="btnSaveEeprom" onclick="saveToEeprom()" disabled
+                style="width:100%;padding:5px 8px;font-size:10px;">⚠ SAVE TO EEPROM</button>
+        <div style="font-size:9px;color:var(--text3);margin-top:2px;">Writes RAM → permanent storage</div>
+      </div>
     </div>
 
     <div class="prog-section">
@@ -1190,7 +1211,8 @@ let confirmedCurrentLimit = null;
 
 function updateDeviceControlButtons(connected) {
   const btns = ['btnDeviceStart', 'btnDeviceStop', 'btnDevicePause', 'btnDeviceNextStep',
-                'btnDirR', 'btnDirN', 'btnStartProg', 'btnSendCurrentLimit'];
+                'btnDirR', 'btnDirN', 'btnStartProg', 'btnSendCurrentLimit',
+                'btnGetProg', 'btnSetProg', 'btnSaveEeprom'];
   btns.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !connected;
@@ -1575,6 +1597,103 @@ function handleStatusError(err) {
 // ═══════════════════════════════════════════════════════════════
 // PROG MESSAGE HANDLER (GET_PROG response)
 // ═══════════════════════════════════════════════════════════════
+
+// Character table for program names (index 0-36)
+const PROG_CHAR_TABLE = ' 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+// Time index table (non-linear encoding, index 0-77)
+function timeIndexToSeconds(idx) {
+  idx = parseInt(idx) || 0;
+  if (idx <= 17) return idx * 10;                    // 0-170s in 10s steps
+  if (idx <= 44) return (idx - 15) * 60;             // 3-29 min in 1 min steps
+  if (idx <= 66) return (idx - 42) * 600;            // 30-240 min in 10 min steps
+  if (idx <= 77) return (idx - 62) * 3600;           // 5-15 hours in 1 hour steps
+  return 0;
+}
+
+function secondsToTimeIndex(sec) {
+  sec = parseInt(sec) || 0;
+  if (sec <= 170) return Math.round(sec / 10);
+  if (sec <= 29 * 60) return Math.round(sec / 60) + 15;
+  if (sec <= 240 * 60) return Math.round(sec / 600) + 42;
+  if (sec <= 15 * 3600) return Math.round(sec / 3600) + 62;
+  return 77; // max
+}
+
+function formatTime(sec) {
+  if (sec < 60) return sec + 's';
+  if (sec < 3600) return Math.floor(sec / 60) + 'm ' + (sec % 60) + 's';
+  return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm';
+}
+
+// Direction encoding
+const DIR_LABELS = { 0: 'OFF', 1: 'N', 2: 'R', 3: 'NP', 4: 'RP' };
+const DIR_VALUES = { 'OFF': 0, 'N': 1, 'R': 2, 'NP': 3, 'RP': 4 };
+
+// Decode program name from 4 character indices
+function decodeProgName(indices) {
+  return indices.map(i => PROG_CHAR_TABLE[parseInt(i)] || ' ').join('');
+}
+
+// Encode program name to 4 character indices
+function encodeProgName(name) {
+  name = (name || '').toUpperCase().padEnd(4, ' ').substring(0, 4);
+  return Array.from(name).map(c => {
+    const idx = PROG_CHAR_TABLE.indexOf(c);
+    return idx >= 0 ? idx : 0;
+  });
+}
+
+// Decode full PROG response into structured object
+function decodeProgram(progNo, rawParts) {
+  // rawParts = [name0,name1,name2,name3,cycle,rstop,target,v1,r1,t1,c1,v2,r2,t2,c2,...]
+  const p = rawParts.map(v => parseInt(v) || 0);
+
+  const prog = {
+    progNo: progNo,
+    name: decodeProgName(p.slice(0, 4)),
+    cycles: p[4],
+    rotationStop: p[5] * 100,  // Internal × 100
+    targetRpm: p[6] * 1000,    // Internal × 1000
+    steps: []
+  };
+
+  // Parse 5 steps (each has: voltage, direction, runtime, cooltime)
+  for (let i = 0; i < 5; i++) {
+    const base = 7 + (i * 4);
+    const step = {
+      voltage: p[base] * 0.1,           // Internal × 0.1 = V
+      direction: DIR_LABELS[p[base + 1]] || 'OFF',
+      runtimeSec: timeIndexToSeconds(p[base + 2]),
+      cooltimeSec: timeIndexToSeconds(p[base + 3])
+    };
+    prog.steps.push(step);
+  }
+
+  return prog;
+}
+
+// Encode program object to raw values for SET_PROG
+function encodeProgram(prog) {
+  const nameIndices = encodeProgName(prog.name);
+  const values = [
+    ...nameIndices,
+    prog.cycles || 1,
+    Math.round((prog.rotationStop || 0) / 100),
+    Math.round((prog.targetRpm || 0) / 1000)
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    const step = prog.steps[i] || { voltage: 0, direction: 'OFF', runtimeSec: 0, cooltimeSec: 0 };
+    values.push(Math.round(step.voltage * 10));
+    values.push(DIR_VALUES[step.direction] || 0);
+    values.push(secondsToTimeIndex(step.runtimeSec));
+    values.push(secondsToTimeIndex(step.cooltimeSec));
+  }
+
+  return values;
+}
+
 function handleProgMessage(line) {
   // Format: PROG:n,name0,name1,name2,name3,cycle,rstop,target,v1,r1,t1,c1,...
   const payload = line.substring(5); // Remove 'PROG:'
@@ -1586,14 +1705,107 @@ function handleProgMessage(line) {
   }
 
   const progNo = parseInt(parts[0]);
-  console.log('[MBC2] Received program', progNo);
+  const rawParts = parts.slice(1);
 
-  // Phase 5: Will decode and store program here
-  // For now, just cache the raw response
+  // Decode and store
+  const program = decodeProgram(progNo, rawParts);
   devicePrograms[progNo] = {
-    raw: parts.slice(1),
-    receivedAt: Date.now()
+    ...program,
+    raw: rawParts,
+    receivedAt: Date.now(),
+    modified: false
   };
+
+  console.log('[MBC2] Received program', progNo, ':', program.name);
+  showToast('Program ' + progNo + ' loaded: ' + program.name);
+
+  // Update UI if program editor is open
+  if (typeof updateProgramEditorDisplay === 'function') {
+    updateProgramEditorDisplay(progNo);
+  }
+}
+
+// Request a program from device
+async function requestProgram(progNo) {
+  if (progNo < 1 || progNo > 50) {
+    showToast('Program number must be 1-50', true);
+    return;
+  }
+  console.log('[MBC2] Requesting program', progNo);
+  await sendCommand('GET_PROG:' + progNo);
+}
+
+// Send a program to device (RAM only until SAVE)
+async function sendProgram(progNo, prog) {
+  if (progNo < 1 || progNo > 50) {
+    showToast('Program number must be 1-50', true);
+    return false;
+  }
+
+  const values = encodeProgram(prog);
+  if (values.length !== 27) {
+    showToast('Invalid program data', true);
+    return false;
+  }
+
+  const cmd = 'SET_PROG:' + progNo + ',' + values.join(',');
+  console.log('[MBC2] Sending program', progNo, ':', cmd);
+  return await sendCommand(cmd);
+}
+
+// Save all RAM changes to EEPROM (with warning)
+async function saveToEeprom() {
+  if (!confirm('Save to EEPROM?\n\nThis writes all program and setting changes to permanent storage.\n\nEEPROM has limited write cycles — avoid saving repeatedly.')) {
+    return;
+  }
+  await sendCommand('SAVE');
+}
+
+// UI handlers for program sync
+async function onGetProgClick() {
+  const progNo = parseInt(document.getElementById('syncProgNo').value);
+  await requestProgram(progNo);
+}
+
+async function onSetProgClick() {
+  const progNo = parseInt(document.getElementById('syncProgNo').value);
+  const prog = devicePrograms[progNo];
+
+  if (!prog) {
+    showToast('Read program ' + progNo + ' first before writing', true);
+    return;
+  }
+
+  if (await sendProgram(progNo, prog)) {
+    showToast('Program ' + progNo + ' written to device RAM (not saved)');
+  }
+}
+
+function updateProgramEditorDisplay(progNo) {
+  const prog = devicePrograms[progNo];
+  const display = document.getElementById('syncProgDisplay');
+  if (!display || !prog) return;
+
+  let html = '<div style="background:var(--bg3);padding:6px;border:1px solid var(--border2);margin-top:4px;">';
+  html += '<div style="font-family:var(--display);font-weight:700;color:var(--accent);font-size:12px;">' + prog.name + '</div>';
+  html += '<div style="color:var(--text2);">Cycles: ' + prog.cycles + ' · Target: ' + (prog.targetRpm || '—') + ' RPM</div>';
+  html += '<table style="width:100%;font-size:9px;margin-top:4px;border-collapse:collapse;">';
+  html += '<tr style="color:var(--text3);"><th>Step</th><th>V</th><th>Dir</th><th>Run</th><th>Cool</th></tr>';
+
+  for (let i = 0; i < prog.steps.length; i++) {
+    const s = prog.steps[i];
+    if (s.voltage === 0 && s.runtimeSec === 0) continue; // Skip empty steps
+    html += '<tr>';
+    html += '<td style="text-align:center;">' + (i + 1) + '</td>';
+    html += '<td style="text-align:center;">' + s.voltage.toFixed(1) + '</td>';
+    html += '<td style="text-align:center;color:' + (s.direction === 'R' ? 'var(--accent2)' : 'var(--text2)') + ';">' + s.direction + '</td>';
+    html += '<td style="text-align:center;">' + formatTime(s.runtimeSec) + '</td>';
+    html += '<td style="text-align:center;">' + formatTime(s.cooltimeSec) + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</table></div>';
+  display.innerHTML = html;
 }
 
 // ═══════════════════════════════════════════════════════════════

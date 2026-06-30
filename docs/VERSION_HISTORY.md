@@ -27,6 +27,16 @@
 - Displays per-step summary table in right panel (cycle, step, RPM, max, V, mA, °C)
 - Overheat steps highlighted in red
 
+- **Phase 5: Program sync (GET_PROG / SET_PROG)** — read/write device programs
+- READ button fetches program from device and decodes all fields
+- WRITE button encodes and sends program to device RAM
+- Full encoding/decoding for program names (char table 0-36)
+- Non-linear time index conversion (0-77 → seconds)
+- Voltage conversion (internal × 0.1V)
+- Direction encoding (0-4 ↔ OFF/N/R/NP/RP)
+- SAVE TO EEPROM button with confirmation warning
+- Program display shows name, cycles, target RPM, and step table
+
 ## v3.2
 
 - Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions

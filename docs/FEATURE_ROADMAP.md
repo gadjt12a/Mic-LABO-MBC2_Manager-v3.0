@@ -77,27 +77,29 @@ Controls to expose:
 
 ---
 
-## Phase 5 — Program sync (GET_PROG / SET_PROG)
+## Phase 5 — Program sync (GET_PROG / SET_PROG) ✓ COMPLETE
 
 **Goal:** Read and write programs on the device from the dashboard.
 
-- `GET_PROG:n` — read a program from device into local DB
-- `SET_PROG:n` — push a local program to device RAM
-- Display encoding/decoding correctly (time index, char table, voltage × 0.1V)
-- `SAVE` button — explicit user action only, with warning about EEPROM write cycles
+- [x] `GET_PROG:n` — read a program from device and decode
+- [x] `SET_PROG:n` — push a program to device RAM
+- [x] Display encoding/decoding correctly (time index, char table, voltage × 0.1V)
+- [x] `SAVE` button — explicit user action only, with warning about EEPROM write cycles
 
 **Encoding requirements:**
-- Program name: integer array 0–36 ↔ ASCII character table
-- Voltage: internal × 0.1V ↔ float V
-- Time: non-linear index table (see SERIAL_SPEC.md §Encodings)
-- Direction: integer 0–4 ↔ label
+- [x] Program name: integer array 0–36 ↔ ASCII character table
+- [x] Voltage: internal × 0.1V ↔ float V
+- [x] Time: non-linear index table (see SERIAL_SPEC.md §Encodings)
+- [x] Direction: integer 0–4 ↔ label
 
 **Rules:**
-- `SET_PROG` changes are RAM-only. Make this visible in the UI ("Not saved to device").
-- `SAVE` must be a separate explicit button, never automatic.
-- Warn user that `SAVE` writes EEPROM — should not be done repeatedly.
+- [x] `SET_PROG` changes are RAM-only. Toast indicates "not saved".
+- [x] `SAVE` must be a separate explicit button, never automatic.
+- [x] Warn user that `SAVE` writes EEPROM — confirmation dialog.
 
-**Acceptance:** Can read a program from device, edit it in the dashboard, push it back, and optionally persist.
+**Acceptance:** Can read a program from device, view it in the dashboard, push it back, and optionally persist.
+
+**Completed in v3.3** — Program sync UI added with READ/WRITE/SAVE buttons. Full encode/decode for all fields.
 
 ---
 

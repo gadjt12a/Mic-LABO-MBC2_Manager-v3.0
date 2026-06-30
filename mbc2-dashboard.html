@@ -883,6 +883,20 @@
                 style="width:100%;padding:5px 8px;font-size:10px;">⚠ SAVE TO EEPROM</button>
         <div style="font-size:9px;color:var(--text3);margin-top:2px;">Writes RAM → permanent storage</div>
       </div>
+
+      <!-- Device Settings -->
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="prog-detail-label">DEVICE SETTINGS</span>
+          <button class="btn" id="btnGetSettings" onclick="onGetSettingsClick()" disabled
+                  style="padding:3px 8px;font-size:9px;">⬇ READ ALL</button>
+        </div>
+        <div id="settingsDisplay" style="margin-top:4px;font-size:10px;color:var(--text3);">
+          Click READ ALL to load device settings.
+        </div>
+        <button class="btn" id="btnEditSettings" onclick="openSettingsEditor()" disabled
+                style="width:100%;margin-top:4px;padding:4px 8px;font-size:9px;">✎ EDIT SETTINGS</button>
+      </div>
     </div>
 
     <div class="prog-section">
@@ -1011,6 +1025,26 @@
       <button class="drawer-close" onclick="closeEditor()">✕ Close</button>
     </div>
     <div class="guide-body" id="editorBody"></div>
+  </div>
+</div>
+
+<!-- DEVICE SETTINGS EDITOR MODAL -->
+<div class="guide-modal" id="settingsModal">
+  <div class="guide-box" style="width:400px;">
+    <div class="guide-box-header">
+      <div class="guide-box-title">Device Settings</div>
+      <button class="drawer-close" onclick="closeSettingsEditor()">✕ Close</button>
+    </div>
+    <div class="guide-body">
+      <div style="margin-bottom:8px;font-size:11px;color:var(--text2);">
+        Changes are written to device RAM. Use SAVE TO EEPROM to make permanent.
+      </div>
+      <div id="settingsEditor"></div>
+      <div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:8px;">
+        <button class="btn" onclick="onGetSettingsClick();buildSettingsEditor();" style="flex:1;">↻ Refresh</button>
+        <button class="btn danger" onclick="saveToEeprom()" style="flex:1;">⚠ Save to EEPROM</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1212,7 +1246,8 @@ let confirmedCurrentLimit = null;
 function updateDeviceControlButtons(connected) {
   const btns = ['btnDeviceStart', 'btnDeviceStop', 'btnDevicePause', 'btnDeviceNextStep',
                 'btnDirR', 'btnDirN', 'btnStartProg', 'btnSendCurrentLimit',
-                'btnGetProg', 'btnSetProg', 'btnSaveEeprom'];
+                'btnGetProg', 'btnSetProg', 'btnSaveEeprom',
+                'btnGetSettings', 'btnEditSettings'];
   btns.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !connected;
@@ -1811,6 +1846,23 @@ function updateProgramEditorDisplay(progNo) {
 // ═══════════════════════════════════════════════════════════════
 // SETTING MESSAGE HANDLER (GET_SETTING response)
 // ═══════════════════════════════════════════════════════════════
+
+// Settings metadata: key → { label, unit, min, max, scale, description }
+const SETTINGS_META = {
+  overheat:      { label: 'Overheat Stop',     unit: '°C',  min: 0,  max: 100, scale: 1,   desc: 'Temperature to stop motor' },
+  limit_volt:    { label: 'Max Voltage',       unit: 'V',   min: 30, max: 90,  scale: 0.1, desc: 'Maximum voltage limit (3.0-9.0V)' },
+  limit_current: { label: 'Over-current Stop', unit: 'A',   min: 5,  max: 45,  scale: 0.1, desc: 'Current limit (0.5-4.5A)' },
+  brightness:    { label: 'Display Brightness',unit: '',    min: 0,  max: 16,  scale: 1,   desc: '0 = dimmest, 16 = brightest' },
+  measure_step:  { label: 'RPM Measure Step',  unit: '',    min: 0,  max: 2,   scale: 1,   desc: '0=final, 1=first, 2=all steps' },
+  cheer_up:      { label: 'Low-V Assist',      unit: 'V',   min: 0,  max: 30,  scale: 0.1, desc: 'Low-voltage assist threshold (0=off)' },
+  pulse_v:       { label: 'Pulse Voltage',     unit: 'V',   min: 0,  max: 90,  scale: 0.1, desc: 'Pulse break-in voltage' },
+  pulse_sec:     { label: 'Pulse Period',      unit: 's',   min: 1,  max: 9,   scale: 1,   desc: 'Pulse cycle period' },
+  pulse_pattern: { label: 'Pulse Pattern',     unit: '',    min: 0,  max: 1,   scale: 1,   desc: '0=ON/OFF, 1=Linear' },
+  buzzer_volume: { label: 'Buzzer Volume',     unit: '',    min: 0,  max: 5,   scale: 1,   desc: '0=OFF, 1-5=volume' }
+};
+
+let settingsReceived = 0;  // Counter for tracking GET_SETTING:ALL progress
+
 function handleSettingMessage(line) {
   // Format: SETTING:key:value
   const payload = line.substring(8); // Remove 'SETTING:'
@@ -1826,8 +1878,151 @@ function handleSettingMessage(line) {
 
   console.log('[MBC2] Setting:', key, '=', value);
   deviceSettings[key] = value;
+  settingsReceived++;
 
-  // Phase 6: Will update settings UI here
+  // Update settings panel if visible
+  updateSettingsDisplay();
+
+  // Show toast when all settings received
+  if (settingsReceived === 10) {
+    showToast('Device settings loaded');
+    settingsReceived = 0;
+  }
+}
+
+// Request all settings from device
+async function requestAllSettings() {
+  settingsReceived = 0;
+  console.log('[MBC2] Requesting all settings...');
+  await sendCommand('GET_SETTING:ALL');
+}
+
+// Send a single setting to device (RAM only until SAVE)
+async function sendSetting(key, value) {
+  const meta = SETTINGS_META[key];
+  if (!meta) {
+    showToast('Unknown setting: ' + key, true);
+    return false;
+  }
+
+  // Validate range
+  if (value < meta.min || value > meta.max) {
+    showToast(meta.label + ' must be ' + meta.min + '-' + meta.max, true);
+    return false;
+  }
+
+  console.log('[MBC2] Sending setting:', key, '=', value);
+  return await sendCommand('SET_SETTING:' + key + ':' + value);
+}
+
+// Convert display value to internal value
+function settingToInternal(key, displayValue) {
+  const meta = SETTINGS_META[key];
+  if (!meta) return displayValue;
+  return Math.round(displayValue / meta.scale);
+}
+
+// Convert internal value to display value
+function settingToDisplay(key, internalValue) {
+  const meta = SETTINGS_META[key];
+  if (!meta) return internalValue;
+  return internalValue * meta.scale;
+}
+
+// Update the settings display panel
+function updateSettingsDisplay() {
+  const container = document.getElementById('settingsDisplay');
+  if (!container) return;
+
+  if (Object.keys(deviceSettings).length === 0) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:10px;">No settings loaded. Click READ ALL.</div>';
+    return;
+  }
+
+  let html = '<div style="max-height:200px;overflow-y:auto;">';
+
+  for (const [key, meta] of Object.entries(SETTINGS_META)) {
+    const rawVal = deviceSettings[key];
+    if (rawVal === undefined) continue;
+
+    const displayVal = settingToDisplay(key, rawVal);
+    const displayStr = meta.scale === 0.1 ? displayVal.toFixed(1) : displayVal;
+
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--border);">';
+    html += '<span style="font-size:10px;color:var(--text2);" title="' + meta.desc + '">' + meta.label + '</span>';
+    html += '<span style="font-size:11px;color:var(--text);font-family:var(--mono);">' + displayStr + meta.unit + '</span>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// Build settings editor UI
+function buildSettingsEditor() {
+  const container = document.getElementById('settingsEditor');
+  if (!container) return;
+
+  if (Object.keys(deviceSettings).length === 0) {
+    container.innerHTML = '<div style="color:var(--text3);font-size:10px;">Load settings first.</div>';
+    return;
+  }
+
+  let html = '<div style="max-height:250px;overflow-y:auto;">';
+
+  for (const [key, meta] of Object.entries(SETTINGS_META)) {
+    const rawVal = deviceSettings[key];
+    if (rawVal === undefined) continue;
+
+    const displayVal = settingToDisplay(key, rawVal);
+    const step = meta.scale === 0.1 ? '0.1' : '1';
+
+    html += '<div style="margin-bottom:6px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+    html += '<label style="font-size:10px;color:var(--text2);" title="' + meta.desc + '">' + meta.label + '</label>';
+    html += '<div style="display:flex;align-items:center;gap:4px;">';
+    html += '<input type="number" id="setting_' + key + '" value="' + displayVal.toFixed(meta.scale === 0.1 ? 1 : 0) + '" ';
+    html += 'min="' + (meta.min * meta.scale) + '" max="' + (meta.max * meta.scale) + '" step="' + step + '" ';
+    html += 'style="width:60px;font-family:var(--mono);font-size:11px;padding:2px 4px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">';
+    html += '<span style="font-size:10px;color:var(--text3);width:20px;">' + meta.unit + '</span>';
+    html += '<button class="btn" onclick="applySetting(\'' + key + '\')" style="padding:2px 6px;font-size:9px;">SET</button>';
+    html += '</div></div></div>';
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// Apply a single setting from the editor
+async function applySetting(key) {
+  const input = document.getElementById('setting_' + key);
+  if (!input) return;
+
+  const displayVal = parseFloat(input.value);
+  const internalVal = settingToInternal(key, displayVal);
+
+  if (await sendSetting(key, internalVal)) {
+    showToast(SETTINGS_META[key].label + ' updated (RAM only)');
+    deviceSettings[key] = internalVal;
+  }
+}
+
+// UI handlers for settings
+async function onGetSettingsClick() {
+  await requestAllSettings();
+}
+
+function openSettingsEditor() {
+  if (Object.keys(deviceSettings).length === 0) {
+    showToast('Load settings first (click READ ALL)', true);
+    return;
+  }
+  buildSettingsEditor();
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function closeSettingsEditor() {
+  document.getElementById('settingsModal').classList.remove('open');
 }
 
 // ═══════════════════════════════════════════════════════════════

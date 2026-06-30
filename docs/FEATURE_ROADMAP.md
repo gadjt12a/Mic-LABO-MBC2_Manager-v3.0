@@ -103,16 +103,23 @@ Controls to expose:
 
 ---
 
-## Phase 6 — Device settings panel (GET_SETTING / SET_SETTING)
+## Phase 6 — Device settings panel (GET_SETTING / SET_SETTING) ✓ COMPLETE
 
 **Goal:** Read and write device system settings.
 
-- `GET_SETTING:ALL` on connect to read current device config
-- Display all settings with their human-readable labels and unit conversions
-- Allow editing individual settings with `SET_SETTING:key:value`
-- `SAVE` button (same rules as Phase 5 — explicit, warned, batched)
+- [x] `GET_SETTING:ALL` — read all 10 settings from device
+- [x] Display all settings with human-readable labels and unit conversions
+- [x] Allow editing individual settings with `SET_SETTING:key:value`
+- [x] `SAVE` button (same rules as Phase 5 — explicit, warned, batched)
+
+**Settings supported:**
+- overheat (°C), limit_volt (V), limit_current (A)
+- brightness, measure_step, cheer_up (V)
+- pulse_v (V), pulse_sec (s), pulse_pattern, buzzer_volume
 
 **Acceptance:** Can view and edit all device settings from the dashboard.
+
+**Completed in v3.3** — Settings panel with READ ALL, display, and editor modal. All unit conversions handled.
 
 ---
 

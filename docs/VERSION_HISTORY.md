@@ -37,6 +37,13 @@
 - SAVE TO EEPROM button with confirmation warning
 - Program display shows name, cycles, target RPM, and step table
 
+- **Phase 6: Device settings panel (GET_SETTING / SET_SETTING)**
+- READ ALL button fetches all 10 device settings
+- Settings display with human-readable labels and unit conversions
+- Settings editor modal for modifying values
+- Per-setting SET buttons write individual settings to RAM
+- Supports: overheat, limit_volt, limit_current, brightness, measure_step, cheer_up, pulse_v, pulse_sec, pulse_pattern, buzzer_volume
+
 ## v3.2
 
 - Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions

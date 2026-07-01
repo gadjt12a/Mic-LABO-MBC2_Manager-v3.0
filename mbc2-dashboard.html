@@ -884,6 +884,10 @@
           <button class="btn primary" id="btnStartProg" onclick="deviceStartProg()" disabled
                   style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
         </div>
+        <div style="margin-top:4px;">
+          <button class="btn danger" id="btnStopProg" onclick="deviceStopProg()" disabled
+                  style="width:100%;padding:5px 8px;font-size:10px;">■ STOP PROG</button>
+        </div>
       </div>
 
     </div>
@@ -1199,7 +1203,7 @@ let confirmedCurrentLimit = null;
 
 function updateDeviceControlButtons(connected) {
   const btns = ['btnDeviceStart', 'btnDeviceStop', 'btnDevicePause', 'btnDeviceNextStep',
-                'btnDirR', 'btnDirN', 'btnStartProg', 'btnSendCurrentLimit',
+                'btnDirR', 'btnDirN', 'btnStartProg', 'btnStopProg', 'btnSendCurrentLimit',
                 // Settings tab buttons
                 'btnReadAllSettings', 'btnSaveEepromSettings',
                 'btnSettingsGetProg', 'btnSettingsSetProg'];
@@ -1272,6 +1276,19 @@ async function deviceStop() {
   if (recording) {
     stopRecording();
   }
+  // Stop benchmark mode if active
+  if (benchmarkMode) {
+    stopBenchmarkSession();
+  }
+  // Hide the benchmark banner
+  document.getElementById('benchmarkBanner').classList.remove('active');
+  // Reset run indicator
+  document.getElementById('runIndicator').style.display = 'none';
+}
+
+// STOP PROG (alias for deviceStop, used by dedicated button)
+async function deviceStopProg() {
+  await deviceStop();
 }
 
 // PAUSE

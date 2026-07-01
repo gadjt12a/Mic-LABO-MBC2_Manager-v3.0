@@ -908,6 +908,7 @@
       <div class="prog-motor" id="progMotor">—</div>
     </div>
     <div class="prog-section">
+      <div class="chart-label">Program Status</div>
       <div class="prog-detail"><span class="prog-detail-label">CYCLE</span><span class="prog-detail-value" id="progCycle">— / —</span></div>
       <div class="prog-detail"><span class="prog-detail-label">STEP</span><span class="prog-detail-value" id="progStep">—</span></div>
       <div class="prog-detail"><span class="prog-detail-label">TARGET</span><span class="prog-detail-value" id="progTarget">—</span></div>
@@ -2271,34 +2272,27 @@ function updateProgram() {
   const targetRpm = activeProg ? activeProg.targetRpm : state.target;
   document.getElementById('progTarget').textContent = targetRpm > 0 ? targetRpm.toLocaleString() + ' rpm' : '—';
 
-  // Time Left — use elapsed_ms based on step start time rather than raw counter
-  // The counter from serial is in device ticks, not reliable for display
-  // Use step start tracking instead
-  if (!stepStartTimes) window.stepStartTimes = {};
-  const stepKey = state.cycle + '_' + state.step;
-  if (!stepStartTimes[stepKey] && state.rpm > 0 && state.volts > 0) {
-    stepStartTimes[stepKey] = Date.now();
-  }
+  // Time Left — use device-reported elapsed and target times directly
+  // state.counter = elapsed_sec (col[14]), state.target = set_runtime_sec (col[15])
+  const elapsedSec = state.counter || 0;
+  const targetSec = state.target || 0;
 
-  // Get step duration from active program
-  let stepDurationSec = 0;
-  let coolDurationSec = 0;
-  if (activeProg && activeProg.steps && state.step > 0) {
-    const stepDef = activeProg.steps[state.step - 1];
-    if (stepDef) {
-      stepDurationSec = parseTimeString(stepDef.time);
-      coolDurationSec = parseTimeString(stepDef.cool);
-    }
-  }
-
-  // Time left display
-  if (stepStartTimes[stepKey] && stepDurationSec > 0) {
-    const elapsed = (Date.now() - stepStartTimes[stepKey]) / 1000;
-    const remaining = Math.max(0, stepDurationSec - elapsed);
+  // Time left display - calculate from device data
+  if (targetSec > 0) {
+    const remaining = Math.max(0, targetSec - elapsedSec);
     const mm = Math.floor(remaining / 60), ss = Math.floor(remaining % 60);
     document.getElementById('progTime').textContent = mm + ':' + String(ss).padStart(2, '0');
   } else {
     document.getElementById('progTime').textContent = '—';
+  }
+
+  // Get cooldown duration from active program for cooldown tracking
+  let coolDurationSec = 0;
+  if (activeProg && activeProg.steps && state.step > 0) {
+    const stepDef = activeProg.steps[state.step - 1];
+    if (stepDef) {
+      coolDurationSec = parseTimeString(stepDef.cool);
+    }
   }
 
   // Detect step change to start cooldown timer

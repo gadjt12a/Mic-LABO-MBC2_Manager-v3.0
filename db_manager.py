@@ -704,3 +704,183 @@ def get_motor_sessions(motor_id: int) -> list:
             ORDER BY s.session_date DESC
         """, (motor_id,)).fetchall()
         return [dict(r) for r in rows]
+
+
+# ============================================================
+# CONNECTION TRACKING
+# ============================================================
+
+def _ensure_connections_table(conn):
+    """Create connections table if missing (migration for existing DBs)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS connections (
+            connection_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+            ended_at            TEXT,
+            end_reason          TEXT,
+            total_sessions      INTEGER NOT NULL DEFAULT 0,
+            notes               TEXT
+        )
+    """)
+
+
+def _ensure_crash_events_table(conn):
+    """Create crash_events table if missing (migration for existing DBs)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS crash_events (
+            event_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            logged_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+            connection_id       INTEGER REFERENCES connections(connection_id),
+            connection_age_sec  INTEGER,
+            session_id          INTEGER REFERENCES sessions(session_id),
+            session_age_sec     INTEGER,
+            rows_captured       INTEGER,
+            prog_name           TEXT,
+            prog_step           INTEGER,
+            last_volts          REAL,
+            last_amps           REAL,
+            last_rpm            INTEGER,
+            last_kv             INTEGER,
+            last_temp           REAL,
+            motor_id            INTEGER REFERENCES motors(motor_id),
+            motor_identifier    TEXT,
+            silence_duration_sec INTEGER,
+            trigger             TEXT,
+            notes               TEXT
+        )
+    """)
+
+
+def open_connection() -> int:
+    """Record a new serial connection opening. Returns connection_id."""
+    with get_connection() as conn:
+        _ensure_connections_table(conn)
+        cur = conn.execute(
+            "INSERT INTO connections (started_at) VALUES (datetime('now'))"
+        )
+        conn.commit()
+        return cur.lastrowid
+
+
+def close_connection(connection_id: int, end_reason: str = 'normal') -> None:
+    """Mark a connection as closed."""
+    with get_connection() as conn:
+        _ensure_connections_table(conn)
+        conn.execute("""
+            UPDATE connections
+            SET ended_at = datetime('now'), end_reason = ?
+            WHERE connection_id = ?
+        """, (end_reason, connection_id))
+        conn.commit()
+
+
+def increment_connection_sessions(connection_id: int) -> None:
+    """Bump the session counter for a connection."""
+    with get_connection() as conn:
+        _ensure_connections_table(conn)
+        conn.execute("""
+            UPDATE connections SET total_sessions = total_sessions + 1
+            WHERE connection_id = ?
+        """, (connection_id,))
+        conn.commit()
+
+
+def get_connection_sessions(connection_id: int) -> list:
+    """Return all sessions that ran on a given connection, with summary stats."""
+    with get_connection() as conn:
+        _ensure_crash_events_table(conn)
+        _ensure_connections_table(conn)
+        rows = conn.execute("""
+            SELECT
+                s.session_id,
+                s.session_type,
+                s.session_date,
+                s.notes,
+                m.identifier    AS motor_identifier,
+                pg.name         AS program_name,
+                b.peak_rpm,
+                b.avg_rpm,
+                b.peak_temp_c,
+                COUNT(sd.data_id) AS row_count
+            FROM sessions s
+            LEFT JOIN motors m ON s.motor_id = m.motor_id
+            LEFT JOIN motor_breakin_log mbl ON mbl.session_id = s.session_id
+            LEFT JOIN programs pg ON mbl.program_id = pg.program_id
+            LEFT JOIN benchmarks b ON b.session_id = s.session_id
+            LEFT JOIN session_data sd ON sd.session_id = s.session_id
+            WHERE s.session_id IN (
+                SELECT ce.session_id FROM crash_events ce WHERE ce.connection_id = ?
+                UNION
+                SELECT s2.session_id FROM sessions s2
+                WHERE s2.session_date >= (SELECT started_at FROM connections WHERE connection_id = ?)
+                  AND (s2.session_date <= (SELECT ended_at FROM connections WHERE connection_id = ?)
+                       OR (SELECT ended_at FROM connections WHERE connection_id = ?) IS NULL)
+            )
+            GROUP BY s.session_id
+            ORDER BY s.session_date ASC
+        """, (connection_id, connection_id, connection_id, connection_id)).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ============================================================
+# CRASH EVENTS
+# ============================================================
+
+def log_crash_event(payload: dict) -> int:
+    """
+    Record a crash/data-silence event to the crash_events table.
+    payload keys (all optional except trigger):
+      connection_id, connection_age_sec,
+      session_id, session_age_sec, rows_captured,
+      prog_name, prog_step, last_volts, last_amps,
+      last_rpm, last_kv, last_temp,
+      motor_id, motor_identifier,
+      silence_duration_sec, trigger, notes
+    """
+    with get_connection() as conn:
+        _ensure_crash_events_table(conn)
+        cur = conn.execute("""
+            INSERT INTO crash_events (
+                connection_id, connection_age_sec,
+                session_id, session_age_sec, rows_captured,
+                prog_name, prog_step, last_volts, last_amps,
+                last_rpm, last_kv, last_temp,
+                motor_id, motor_identifier,
+                silence_duration_sec, trigger, notes
+            ) VALUES (
+                :connection_id, :connection_age_sec,
+                :session_id, :session_age_sec, :rows_captured,
+                :prog_name, :prog_step, :last_volts, :last_amps,
+                :last_rpm, :last_kv, :last_temp,
+                :motor_id, :motor_identifier,
+                :silence_duration_sec, :trigger, :notes
+            )
+        """, payload)
+        conn.commit()
+        return cur.lastrowid
+
+
+def get_crash_events(limit: int = 50) -> list:
+    """Return recent crash events with their connection record, newest first."""
+    with get_connection() as conn:
+        _ensure_crash_events_table(conn)
+        _ensure_connections_table(conn)
+        rows = conn.execute("""
+            SELECT
+                ce.*,
+                c.started_at        AS conn_started_at,
+                c.total_sessions    AS conn_total_sessions
+            FROM crash_events ce
+            LEFT JOIN connections c ON ce.connection_id = c.connection_id
+            ORDER BY ce.event_id DESC
+            LIMIT ?
+        """, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_crash_event(event_id: int) -> None:
+    """Delete a crash event by ID."""
+    with get_connection() as conn:
+        _ensure_crash_events_table(conn)
+        conn.execute("DELETE FROM crash_events WHERE event_id = ?", (event_id,))
+        conn.commit()

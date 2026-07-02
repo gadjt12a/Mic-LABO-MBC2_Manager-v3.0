@@ -70,6 +70,35 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
             self._json({'ok': True})
             return
 
+        # ── Connection tracking ───────────────────────────────
+        if path == '/api/connections/open':
+            try:
+                connection_id = db.open_connection()
+                self._json({'ok': True, 'connection_id': connection_id})
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
+        if path.startswith('/api/connections/') and path.endswith('/sessions'):
+            parts = path.split('/')
+            if len(parts) == 5:
+                try:
+                    connection_id = int(parts[3])
+                    sessions = db.get_connection_sessions(connection_id)
+                    self._json({'sessions': sessions})
+                except Exception as e:
+                    self._json({'error': str(e)}, 500)
+            return
+
+        # ── Crash events ──────────────────────────────────────
+        if path == '/api/crash-events':
+            try:
+                events = db.get_crash_events()
+                self._json({'events': events})
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
         # ── Sessions list (from DB) ───────────────────────────
         if path == '/api/sessions':
             try:
@@ -169,6 +198,31 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
             motor_api.handle_motor_api(self)
             return
 
+        # ── Connection close ──────────────────────────────────
+        if path == '/api/connections/close':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length))
+                connection_id = body.get('connection_id')
+                end_reason = body.get('end_reason', 'normal')
+                if connection_id:
+                    db.close_connection(connection_id, end_reason)
+                self._json({'ok': True})
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
+        # ── Crash events ──────────────────────────────────────
+        if path == '/api/crash-events':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length))
+                event_id = db.log_crash_event(body)
+                self._json({'ok': True, 'event_id': event_id})
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
         # ── Save session to DB ────────────────────────────────
         # Payload: {
         #   motor_id, session_type, notes,
@@ -251,6 +305,18 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
                     session_id = int(parts[3])
                     db.delete_session(session_id)
                     self._json({'ok': True, 'deleted': session_id})
+                except Exception as e:
+                    self._json({'error': str(e)}, 500)
+            return
+
+        # ── Delete a crash event ──────────────────────────────
+        if path.startswith('/api/crash-events/'):
+            parts = path.split('/')
+            if len(parts) == 4:
+                try:
+                    event_id = int(parts[3])
+                    db.delete_crash_event(event_id)
+                    self._json({'ok': True, 'deleted': event_id})
                 except Exception as e:
                     self._json({'error': str(e)}, 500)
             return

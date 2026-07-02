@@ -98,29 +98,44 @@ Raw telemetry rows. One row per CSV line received from device.
 | `prog_loop` | INTEGER | Program loop counter |
 | `prog_max_loop` | INTEGER | Program max loop |
 
+### `connections`
+
+USB serial connection lifecycle tracking. One row per connect event.
+
+| Column | Type | Notes |
+|---|---|---|
+| `connection_id` | INTEGER PK | Auto-increment |
+| `started_at` | TEXT | ISO8601 timestamp |
+| `ended_at` | TEXT | ISO8601 timestamp, nullable if still open or crashed |
+| `end_reason` | TEXT | `normal`, `crash`, `unknown` |
+| `total_sessions` | INTEGER | Count of sessions completed during connection |
+| `notes` | TEXT | Free text |
+
 ### `crash_events`
 
 Motor state snapshots on unexpected silence (watchdog trigger) or detected crash.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `session_id` | INTEGER FK | → `sessions.id` |
-| `event_type` | TEXT | `watchdog`, `brownout`, `user_reported` |
-| `timestamp` | TEXT | ISO8601 timestamp |
-| `program_no` | INTEGER | At time of event |
-| `program_name` | TEXT | |
-| `current_cycle` | INTEGER | |
-| `current_step` | INTEGER | |
-| `run_state` | INTEGER | Last known run_state |
-| `current_rpm` | INTEGER | Last known RPM |
-| `voltage_mv` | INTEGER | Last known voltage (mV) |
-| `current_ma` | INTEGER | Last known current (mA) |
-| `temperature` | INTEGER | Last known temp (°C) |
-| `elapsed_sec` | INTEGER | Elapsed in step at crash |
-| `loop_number` | INTEGER | |
-| `max_loop` | INTEGER | |
-| `notes` | TEXT | Free text, user-provided or auto-generated |
+| `event_id` | INTEGER PK | Auto-increment |
+| `logged_at` | TEXT | ISO8601 timestamp |
+| `connection_id` | INTEGER FK | → `connections.connection_id` |
+| `connection_age_sec` | INTEGER | Seconds port was open before silence |
+| `session_id` | INTEGER FK | → `sessions.id`, nullable |
+| `session_age_sec` | INTEGER | Seconds since recording started |
+| `rows_captured` | INTEGER | Rows in session buffer at time of event |
+| `prog_name` | TEXT | 4-char program name at time of event |
+| `prog_step` | INTEGER | Step number at time of event |
+| `last_volts` | REAL | Last known voltage (V) |
+| `last_amps` | REAL | Last known current (A) |
+| `last_rpm` | INTEGER | Last known RPM |
+| `last_kv` | INTEGER | Last known kV efficiency |
+| `last_temp` | REAL | Last known temp (°C) |
+| `motor_id` | INTEGER FK | → `motors.motor_id`, nullable |
+| `motor_identifier` | TEXT | Denormalised motor identifier for display |
+| `silence_duration_sec` | INTEGER | Seconds of no data before event fired |
+| `trigger` | TEXT | `silence`, `disconnect`, `manual` |
+| `notes` | TEXT | Free text |
 
 ### `programs`
 

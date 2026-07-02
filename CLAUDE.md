@@ -18,7 +18,7 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 | Serial | Web Serial API (Chrome only, 115200 baud) |
 | Host | Windows (Microsoft Surface X, ARM64) |
 
-**Working directory:** `C:\Users\Kris.Pawson\projects\Mic-LABO-MBC2_Manager-v3.0\`
+**Working directory:** `C:\kris\Projects\Mic-LABO-MBC2_Manager-v3.0\`
 
 ---
 

@@ -316,11 +316,26 @@
   .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
 
 
-  /* ── RAW DATA TAB ── */
+  /* ── TAB BAR ── */
   .tab-bar { display:flex; gap:1px; background:var(--border); flex-shrink:0; }
   .tab-btn { font-family:var(--display); font-weight:700; font-size:16px; letter-spacing:2px; text-transform:uppercase; padding:10px 20px; border:none; background:var(--bg3); color:var(--text2); cursor:pointer; transition:all 0.15s; border-bottom:3px solid transparent; }
   .tab-btn.active { background:var(--bg2); color:var(--accent); border-bottom-color:var(--accent); }
   .tab-btn:hover:not(.active) { color:var(--text); background:var(--bg2); }
+
+  /* Extras dropdown */
+  .tab-spacer { flex:1; background:var(--bg3); }
+  .extras-dropdown { position:relative; }
+  .extras-btn { font-family:var(--display); font-weight:700; font-size:14px; letter-spacing:2px; text-transform:uppercase; padding:10px 16px; border:none; background:var(--bg3); color:var(--text3); cursor:pointer; transition:all 0.15s; border-bottom:3px solid transparent; display:flex; align-items:center; gap:6px; }
+  .extras-btn:hover { color:var(--text); background:var(--bg2); }
+  .extras-btn.has-active { color:var(--accent); border-bottom-color:var(--accent); }
+  .extras-btn::after { content:'▾'; font-size:10px; }
+  .extras-menu { position:absolute; top:100%; right:0; background:var(--bg2); border:1px solid var(--border2); min-width:160px; display:none; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.3); }
+  .extras-dropdown.open .extras-menu { display:block; }
+  .extras-item { display:block; width:100%; padding:10px 16px; border:none; background:none; color:var(--text2); font-family:var(--display); font-weight:600; font-size:12px; letter-spacing:1px; text-transform:uppercase; text-align:left; cursor:pointer; transition:all 0.15s; border-left:3px solid transparent; }
+  .extras-item:hover { background:var(--bg3); color:var(--text); }
+  .extras-item.active { color:var(--accent); border-left-color:var(--accent); background:rgba(0,229,255,0.05); }
+
+  /* ── RAW DATA TAB ── */
 
   .tab-panel { display:none; flex:1; flex-direction:column; overflow:hidden; min-height:0; }
   .tab-panel.active { display:flex; }
@@ -490,25 +505,7 @@
   .benchmark-banner.active { display: flex; }
   .bm-countdown { font-size: 20px; font-weight: 900; color: var(--warn); margin-left: auto; }
 
-  /* ── MOTOR ROSTER TABLE ── */
-  .roster-wrap { flex: 1; overflow-y: auto; padding: 12px 16px; min-height: 0; }
-  .roster-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  .roster-table th {
-    font-family: var(--display); font-weight: 700; font-size: 10px;
-    letter-spacing: 2px; text-transform: uppercase; color: var(--text3);
-    padding: 6px 8px; border-bottom: 1px solid var(--border2);
-    text-align: left; white-space: nowrap; cursor: pointer;
-  }
-  .roster-table th:hover { color: var(--accent); }
-  .roster-table th.sort-asc::after { content: ' ▲'; color: var(--accent); }
-  .roster-table th.sort-desc::after { content: ' ▼'; color: var(--accent); }
-  .roster-table td {
-    padding: 5px 8px; border-bottom: 1px solid var(--border);
-    color: var(--text2); vertical-align: middle;
-  }
-  .roster-table tr:hover td { background: rgba(255,255,255,0.02); }
-  .roster-table tr.retired td { opacity: 0.4; }
-
+  /* ── RATING BADGES ── */
   .rating-badge {
     font-family: var(--display); font-weight: 900; font-size: 14px;
     padding: 2px 8px; border: 1px solid;
@@ -524,13 +521,6 @@
   .trend-up { color: var(--accent3); }
   .trend-flat { color: var(--text3); }
   .trend-down { color: var(--danger); }
-
-  .rpm-val { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--text); }
-  .eff-val { font-family: var(--display); font-weight: 600; font-size: 12px; color: var(--text2); }
-
-  .roster-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .roster-filter { font-family: var(--mono); font-size: 11px; padding: 4px 8px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); outline: none; }
-  .roster-filter:focus { border-color: var(--accent); }
 
   /* ── BENCHMARK HISTORY CHART ── */
   .bench-chart-wrap { padding: 0 16px 12px; flex-shrink: 0; }
@@ -579,6 +569,29 @@
   .fw-card.latest .fw-ver { color: var(--accent3); }
   .fw-card .fw-dl { font-family: var(--display); font-weight: 600; font-size: 10px; letter-spacing: 1px; padding: 4px 10px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; text-decoration: none; transition: all 0.15s; }
   .fw-card .fw-dl:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── CRASH LOG ── */
+  .crashlog-panel { padding: 16px; overflow-y: auto; }
+  .crashlog-panel.active { display: block; }
+  .crash-event-card { background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--danger); padding: 12px 14px; margin-bottom: 10px; }
+  .crash-event-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .crash-trigger { font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: 1px; }
+  .crash-time { font-family: var(--display); font-size: 10px; color: var(--text3); flex: 1; }
+  .crash-event-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; }
+  .crash-field { display: flex; flex-direction: column; gap: 1px; }
+  .crash-field label { font-family: var(--display); font-size: 9px; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; }
+  .crash-field span { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .crash-notes { margin-top: 8px; font-size: 11px; color: var(--text3); font-style: italic; }
+  .crash-section-label { font-family: var(--display); font-size: 9px; letter-spacing: 2px; color: var(--accent); text-transform: uppercase; margin-bottom: 6px; margin-top: 10px; }
+  .crash-sessions-header { font-family: var(--display); font-size: 10px; color: var(--text3); margin: 8px 0 4px; letter-spacing: 1px; }
+  .crash-sessions-table { border: 1px solid var(--border); overflow: hidden; }
+  .crash-sess-row { display: grid; grid-template-columns: 24px 1fr 1fr 70px 50px 80px; gap: 0 8px; padding: 4px 8px; font-family: var(--mono); font-size: 11px; border-bottom: 1px solid var(--border); align-items: center; }
+  .crash-sess-row:last-child { border-bottom: none; }
+  .crash-sess-head { background: var(--bg3); font-family: var(--display); font-size: 9px; letter-spacing: 1px; color: var(--text3); text-transform: uppercase; }
+  .sess-end-reason.complete { color: var(--accent3); }
+  .sess-end-reason.manual_stop { color: var(--accent2); }
+  .sess-end-reason.crash, .sess-end-reason.unknown { color: var(--danger); }
+  .btn.small { padding: 2px 8px; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -666,10 +679,17 @@
     <!-- TAB BAR -->
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('charts')" id="tabCharts">📈 Charts</button>
-      <button class="tab-btn" onclick="switchTab('raw')" id="tabRaw">⚡ Raw Data</button>
       <button class="tab-btn" onclick="switchTab('programs')" id="tabPrograms">📋 Programs</button>
       <button class="tab-btn" onclick="switchTab('motors')" id="tabMotors">🔧 Motors</button>
       <button class="tab-btn" onclick="switchTab('settings')" id="tabSettings">⚙ Settings</button>
+      <div class="tab-spacer"></div>
+      <div class="extras-dropdown" id="extrasDropdown">
+        <button class="extras-btn" onclick="toggleExtrasMenu(event)">Extras</button>
+        <div class="extras-menu">
+          <button class="extras-item" onclick="switchTab('raw')" id="tabRaw">⚡ Raw Data</button>
+          <button class="extras-item" onclick="switchTab('crashlog')" id="tabCrashlog">🛑 Crash Log</button>
+        </div>
+      </div>
     </div>
 
     <!-- CHARTS TAB -->
@@ -803,6 +823,19 @@
         <div id="settingsSyncDisplay" style="font-size:10px;color:var(--text3);"></div>
       </div>
 
+    </div>
+
+    <!-- CRASH LOG TAB -->
+    <div class="tab-panel crashlog-panel" id="panelCrashlog">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="font-family:var(--display);font-weight:700;font-size:13px;letter-spacing:2px;color:var(--danger)">🛑 CRASH / DATA-LOSS LOG</span>
+        <button class="btn" onclick="loadCrashLog()">↻ Refresh</button>
+      </div>
+      <div style="font-family:var(--display);font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.6;">
+        Events are logged automatically when serial data goes silent for 30+ seconds while a session is active.
+        Each event captures a snapshot of the last known motor state and connection context.
+      </div>
+      <div id="crashLogBody"></div>
     </div>
 
   </div>
@@ -1048,6 +1081,16 @@ let cooldownActive = false;
 let cooldownStart = 0;
 let cooldownDuration = 0; // seconds
 let cooldownInterval = null;
+
+// Connection tracking
+let connectionDbId = null;          // DB connection_id from /api/connections/open
+let connectionStartedAt = null;     // Date when connection opened
+let lastDataTimestamp = null;       // Last time we received serial data
+
+// Silence watchdog
+const SILENCE_THRESHOLD_SEC = 30;   // Seconds of silence before flagging crash
+let silenceWatchdog = null;         // setInterval handle
+let _crashFired = false;            // Prevent duplicate events per silence episode
 let prevStepForCool = 0;
 let prevVolts = 0;
 
@@ -1119,6 +1162,20 @@ async function connectSerial() {
     updateDeviceControlButtons(true);
     showToast('MBC2 Connected');
     requestWakeLock();
+
+    // Register connection in DB
+    connectionStartedAt = new Date();
+    connectionDbId = null;
+    apiGet('/api/connections/open').then(res => {
+      if (res?.connection_id) {
+        connectionDbId = res.connection_id;
+        console.log('[MBC2] Connection registered in DB:', connectionDbId);
+      }
+    });
+
+    // Start silence watchdog
+    startSilenceWatchdog();
+
     startReadLoop();
   } catch(e) {
     console.error('[MBC2] Connection error:', e.name, e.message, e);
@@ -1137,9 +1194,22 @@ async function connectSerial() {
 
 async function disconnectSerial() {
   recording = false;
+  stopSilenceWatchdog();
   if (reader) { try { await reader.cancel(); } catch(e) {} reader = null; }
   if (port)   { try { await port.close();   } catch(e) {} port = null; }
   releaseWakeLock();
+
+  // Close connection in DB
+  if (connectionDbId) {
+    apiPost('/api/connections/close', {
+      connection_id: connectionDbId,
+      end_reason: 'normal'
+    });
+    connectionDbId = null;
+  }
+  connectionStartedAt = null;
+  lastDataTimestamp = null;
+
   setStatus('', 'Disconnected');
   document.getElementById('btnConnect').disabled = false;
   document.getElementById('btnDisconnect').disabled = true;
@@ -2113,6 +2183,9 @@ function clearDeviceLog() {
 function parseCSVTelemetry(line) {
   const parts = line.split(',');
   if (parts.length < 18) return;
+
+  // Track last data timestamp for silence watchdog
+  lastDataTimestamp = new Date();
 
   rawCount++;
   document.getElementById('rawCount').textContent = rawCount;
@@ -3381,21 +3454,36 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 // INIT
 // ═══════════════════════════════════════════════════════════════
 // ── TAB SWITCHING ────────────────────────────────────────────────────────────
+const EXTRAS_TABS = ['raw', 'crashlog'];
+
 function switchTab(tab) {
+  // Close extras menu
+  document.getElementById('extrasDropdown').classList.remove('open');
+
   // Clear all panels and tab buttons
-  ['panelCharts','panelRaw','panelPrograms','panelMotors','panelSettings'].forEach(id => {
+  ['panelCharts','panelRaw','panelPrograms','panelMotors','panelSettings','panelCrashlog'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
-  ['tabCharts','tabRaw','tabPrograms','tabMotors','tabSettings'].forEach(id => {
+  ['tabCharts','tabRaw','tabPrograms','tabMotors','tabSettings','tabCrashlog'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('active');
   });
+
   // Activate selected
   const panel = document.getElementById('panel' + tab.charAt(0).toUpperCase() + tab.slice(1));
   const tabBtn = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (panel) panel.classList.add('active');
   if (tabBtn) tabBtn.classList.add('active');
+
+  // Update Extras button state
+  const extrasBtn = document.querySelector('.extras-btn');
+  if (EXTRAS_TABS.includes(tab)) {
+    extrasBtn.classList.add('has-active');
+  } else {
+    extrasBtn.classList.remove('has-active');
+  }
+
   // Redraw charts if switching back
   if (tab === 'charts' && chartData.rpm.length) {
     drawChart('chartRpm', chartData.rpm, '#00e5ff', null, true);
@@ -3415,7 +3503,24 @@ function switchTab(tab) {
     loadFirmwareGrid();
     buildSettingsGrid();
   }
+  // Load crash log when switching to crashlog tab
+  if (tab === 'crashlog') {
+    loadCrashLog();
+  }
 }
+
+function toggleExtrasMenu(event) {
+  event.stopPropagation();
+  document.getElementById('extrasDropdown').classList.toggle('open');
+}
+
+// Close extras menu when clicking outside
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('extrasDropdown');
+  if (dropdown && !dropdown.contains(e.target)) {
+    dropdown.classList.remove('open');
+  }
+});
 
 // ── RAW CONSOLE ───────────────────────────────────────────────────────────────
 let rawPaused = false;
@@ -4635,112 +4740,21 @@ function renderCompareStatsTable(datasets) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// MOTOR ROSTER
+// MOTOR ROSTER DATA
 // ═══════════════════════════════════════════════════════════════
 let rosterData = [];
-let rosterSort = { col: 'best_peak_rpm', dir: -1 };
 
 async function loadRoster() {
-  const tbody = document.getElementById('rosterBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px;">Loading...</td></tr>';
   const res = await fetch(API + '/api/motors/roster');
   if (!res.ok) {
-    // Roster endpoint not available — fall back, ratings won't show
-    if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:20px;">Failed to load — is server running?</td></tr>';
-    console.warn('[loadRoster] /api/motors/roster returned', res.status, '— update motor_api.py to enable ratings');
+    console.warn('[loadRoster] /api/motors/roster returned', res.status);
     return;
   }
   const data = await res.json();
-  if (!data || !data.motors) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--danger);padding:20px;">Failed to load — is server running?</td></tr>';
-    return;
-  }
+  if (!data || !data.motors) return;
   rosterData = data.motors;
-  if (tbody) filterRoster();
   // Re-render motor registry list so rating/efficiency badges update
   if (typeof mrRenderRegistry === 'function') mrRenderRegistry();
-}
-
-function filterRoster() {
-  const statusFilter = document.getElementById('rosterFilter').value;
-  const search = document.getElementById('rosterSearch').value.toLowerCase();
-  let filtered = rosterData.filter(m => {
-    if (statusFilter !== 'all' && m.status !== statusFilter) return false;
-    if (search && !m.identifier.toLowerCase().includes(search) &&
-        !m.model_name.toLowerCase().includes(search)) return false;
-    return true;
-  });
-  // Sort
-  filtered.sort((a, b) => {
-    const av = a[rosterSort.col] ?? (rosterSort.dir === -1 ? -Infinity : Infinity);
-    const bv = b[rosterSort.col] ?? (rosterSort.dir === -1 ? -Infinity : Infinity);
-    if (typeof av === 'string') return av.localeCompare(bv) * rosterSort.dir;
-    return (av - bv) * rosterSort.dir;
-  });
-  renderRoster(filtered);
-}
-
-function sortRoster(col) {
-  if (rosterSort.col === col) rosterSort.dir *= -1;
-  else { rosterSort.col = col; rosterSort.dir = -1; }
-  // Update header classes
-  document.querySelectorAll('.roster-table th').forEach(th => {
-    th.classList.remove('sort-asc','sort-desc');
-  });
-  const ths = document.querySelectorAll('.roster-table th');
-  filterRoster();
-}
-
-function renderRoster(motors) {
-  const tbody = document.getElementById('rosterBody');
-  if (!motors.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:20px;">No motors found</td></tr>';
-    return;
-  }
-
-  const trendIcon = t => {
-    if (t === 'improving') return '<span class="trend-badge trend-up" title="Improving">↑</span>';
-    if (t === 'declining') return '<span class="trend-badge trend-down" title="Declining">↓</span>';
-    if (t === 'plateaued') return '<span class="trend-badge trend-flat" title="Plateaued">→</span>';
-    return '<span class="trend-badge trend-flat" title="Insufficient data">—</span>';
-  };
-
-  const ratingBadge = r => {
-    const cls = ['A','B','C','D'].includes(r) ? r : 'NA';
-    return `<span class="rating-badge ${cls}">${r || '—'}</span>`;
-  };
-
-  tbody.innerHTML = motors.map(m => `
-    <tr class="${m.status !== 'Active' ? 'retired' : ''}" title="${m.identifier}">
-      <td style="font-family:var(--display);font-weight:700;font-size:13px;color:var(--accent);">
-        ${m.identifier}
-        ${m.status !== 'Active' ? `<span style="font-size:9px;color:var(--text3);margin-left:4px;">${m.status}</span>` : ''}
-      </td>
-      <td style="color:var(--text);">${m.model_name || '—'}</td>
-      <td><span class="rpm-val">${m.best_peak_rpm ? m.best_peak_rpm.toLocaleString() : '—'}</span></td>
-      <td><span class="eff-val">${m.efficiency_score ? m.efficiency_score.toLocaleString() + ' RPM/W' : '—'}</span></td>
-      <td>${ratingBadge(m.rating)}</td>
-      <td>${trendIcon(m.trend)}${m.trend_delta_rpm ? ` <span style="font-size:10px;color:var(--text3);">${m.trend_delta_rpm > 0 ? '+' : ''}${m.trend_delta_rpm}</span>` : ''}</td>
-      <td style="text-align:center;">${m.total_benchmarks || 0}</td>
-      <td style="text-align:center;">${m.total_sessions || 0}</td>
-      <td style="font-size:10px;">${m.status}</td>
-      <td>
-        <button class="icon-btn" onclick="showMotorDetail('${m.identifier}')" title="View detail">🔍</button>
-        ${m.status === 'Active'
-          ? `<button class="icon-btn" onclick="setMotorFromRoster(${m.motor_id}, '${m.identifier}')" title="Set as active">▶</button>`
-          : ''}
-      </td>
-    </tr>
-  `).join('');
-}
-
-function setMotorFromRoster(motorId, identifier) {
-  activeMotorId = motorId;
-  // Update active motor display in registry panel
-  const activeEl = document.getElementById('activeMotorDisplay');
-  if (activeEl) activeEl.textContent = identifier;
-  showToast('Active motor: ' + identifier);
-  switchTab('charts');
 }
 
 async function showMotorDetail(identifier) {
@@ -4829,12 +4843,24 @@ async function showMotorDetail(identifier) {
     </div>
 
     <div style="padding:0 16px 16px;display:flex;gap:8px;">
-      <button class="btn primary" onclick="setMotorFromRoster(${motorData.motor_id}, '${identifier}');document.getElementById('motorDetailModal').classList.remove('open')">▶ Set Active</button>
+      <button class="btn primary" onclick="setActiveMotorFromDetail(${motorData.motor_id}, '${identifier}')">▶ Set Active</button>
       <button class="btn danger" onclick="clearMotorSessions('${identifier}')">Clear Sessions</button>
       <button class="btn danger" onclick="retireMotor('${identifier}')">Retire Motor</button>
       <button class="btn" onclick="document.getElementById('motorDetailModal').classList.remove('open')">Close</button>
     </div>
   `;
+}
+
+function setActiveMotorFromDetail(motorId, identifier) {
+  // Set the active motor dropdown
+  const select = document.getElementById('activeMotorSelect');
+  if (select) {
+    select.value = motorId;
+    onActiveMotorChange();
+  }
+  document.getElementById('motorDetailModal').classList.remove('open');
+  showToast('Active motor: ' + identifier);
+  switchTab('charts');
 }
 
 async function clearMotorSessions(identifier) {
@@ -5079,6 +5105,196 @@ document.addEventListener('visibilitychange', () => {
     setTimeout(requestWakeLock, 500);
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SILENCE WATCHDOG & CRASH LOGGING
+// ═══════════════════════════════════════════════════════════════
+
+function startSilenceWatchdog() {
+  stopSilenceWatchdog();
+  silenceWatchdog = setInterval(checkSilence, 5000); // check every 5s
+  console.log('[MBC2] Silence watchdog started');
+}
+
+function stopSilenceWatchdog() {
+  if (silenceWatchdog) { clearInterval(silenceWatchdog); silenceWatchdog = null; }
+}
+
+function checkSilence() {
+  if (!port || !lastDataTimestamp) return;
+  // Only flag silence while a session is recording
+  if (!recording && sessionData.length === 0) return;
+
+  const silenceSec = Math.round((Date.now() - lastDataTimestamp.getTime()) / 1000);
+  if (silenceSec >= SILENCE_THRESHOLD_SEC && !_crashFired) {
+    _crashFired = true;
+    console.warn('[MBC2] Data silence detected:', silenceSec, 'seconds');
+    showToast('No data for ' + silenceSec + 's — possible MBC2 crash. Event logged.', true);
+    logCrashEvent('silence', silenceSec);
+  }
+  // Reset flag once data resumes
+  if (silenceSec < SILENCE_THRESHOLD_SEC) { _crashFired = false; }
+}
+
+async function logCrashEvent(trigger, silenceSec) {
+  const now = Date.now();
+  const connAgeSec = connectionStartedAt
+    ? Math.round((now - connectionStartedAt.getTime()) / 1000) : null;
+  const sessionAgeSec = (recording && sessionStart)
+    ? Math.round((now - sessionStart) / 1000) : null;
+
+  // Mark connection as crashed in DB
+  if (connectionDbId) {
+    apiPost('/api/connections/close', {
+      connection_id: connectionDbId,
+      end_reason: 'crash'
+    }).catch(() => {});
+  }
+
+  // Resolve motor identifier for display
+  let motorIdentifier = null;
+  let motorId = null;
+  try {
+    const mEl = document.getElementById('activeMotorSelect');
+    if (mEl && mEl.value) {
+      motorId = parseInt(mEl.value) || null;
+      motorIdentifier = mEl.options?.[mEl.selectedIndex]?.text || null;
+    }
+  } catch(e) {}
+
+  const payload = {
+    connection_id:        connectionDbId || null,
+    connection_age_sec:   connAgeSec,
+    session_id:           null, // We don't have session DB id until save
+    session_age_sec:      sessionAgeSec,
+    rows_captured:        sessionData.length,
+    prog_name:            state.progName || null,
+    prog_step:            state.step || null,
+    last_volts:           state.volts || null,
+    last_amps:            state.amps || null,
+    last_rpm:             state.rpm || null,
+    last_kv:              state.kv || null,
+    last_temp:            (state.temp && state.temp > -270) ? state.temp : null,
+    motor_id:             motorId,
+    motor_identifier:     motorIdentifier,
+    silence_duration_sec: silenceSec || null,
+    trigger:              trigger,
+    notes:                null
+  };
+
+  try {
+    const res = await apiPost('/api/crash-events', payload);
+    if (res?.event_id) {
+      console.log('[MBC2] Crash event saved, ID:', res.event_id);
+      loadCrashLog();
+    }
+  } catch(e) {
+    console.error('[MBC2] Failed to save crash event:', e);
+  }
+}
+
+// ── Crash Log UI ──────────────────────────────────────────────
+
+async function loadCrashLog() {
+  const container = document.getElementById('crashLogBody');
+  if (!container) return;
+  const data = await apiGet('/api/crash-events');
+  const events = data?.events || [];
+
+  if (events.length === 0) {
+    container.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center;font-family:var(--display)">No crash events recorded</div>';
+    return;
+  }
+
+  // Fetch session history for each unique connection_id
+  const connIds = [...new Set(events.filter(e => e.connection_id).map(e => e.connection_id))];
+  const connSessions = {};
+  await Promise.all(connIds.map(async id => {
+    const res = await apiGet('/api/connections/' + id + '/sessions');
+    connSessions[id] = res?.sessions || [];
+  }));
+
+  container.innerHTML = events.map(e => {
+    const connAge    = e.connection_age_sec != null ? formatDurationSec(e.connection_age_sec) : '—';
+    const sessAge    = e.session_age_sec    != null ? formatDurationSec(e.session_age_sec)    : '—';
+    const silence    = e.silence_duration_sec != null ? e.silence_duration_sec + 's' : '—';
+    const connStart  = e.conn_started_at || '—';
+    const totalSess  = e.conn_total_sessions ?? '—';
+    const triggerColor = e.trigger === 'silence' ? 'var(--danger)' : 'var(--accent2)';
+
+    // Sessions that ran on the same connection
+    const sessions = e.connection_id ? (connSessions[e.connection_id] || []) : [];
+    const sessionsHtml = sessions.length > 0
+      ? `<div class="crash-sessions-header">Sessions on this connection (${sessions.length}):</div>
+         <div class="crash-sessions-table">
+           <div class="crash-sess-row crash-sess-head">
+             <span>#</span><span>Motor</span><span>Program</span>
+             <span>Duration</span><span>Rows</span><span>Ended</span>
+           </div>
+           ${sessions.map((s, i) => `
+             <div class="crash-sess-row">
+               <span>${i + 1}</span>
+               <span>${s.motor_identifier || '—'}</span>
+               <span>${s.program_name || s.session_type || '—'}</span>
+               <span>${s.duration_sec != null ? formatDurationSec(s.duration_sec) : '—'}</span>
+               <span>${s.row_count ?? '—'}</span>
+               <span class="sess-end-reason ${s.end_reason || 'unknown'}">${s.end_reason || '—'}</span>
+             </div>`).join('')}
+         </div>`
+      : `<div style="color:var(--text3);font-family:var(--display);font-size:10px;margin-top:6px">No sessions linked to this connection</div>`;
+
+    return `<div class="crash-event-card" data-event-id="${e.event_id}">
+      <div class="crash-event-header">
+        <span class="crash-trigger" style="color:${triggerColor}">▲ ${(e.trigger||'unknown').toUpperCase()}</span>
+        <span class="crash-time">${e.logged_at}</span>
+        <button class="btn danger small" onclick="deleteCrashEvent(${e.event_id})">✕</button>
+      </div>
+
+      <div class="crash-section-label">CONNECTION</div>
+      <div class="crash-event-grid">
+        <div class="crash-field"><label>Connected at</label><span>${connStart}</span></div>
+        <div class="crash-field"><label>Connection age</label><span>${connAge}</span></div>
+        <div class="crash-field"><label>Sessions completed</label><span>${totalSess}</span></div>
+      </div>
+
+      <div class="crash-section-label">CRASH SNAPSHOT</div>
+      <div class="crash-event-grid">
+        <div class="crash-field"><label>Session age</label><span>${sessAge}</span></div>
+        <div class="crash-field"><label>Rows captured</label><span>${e.rows_captured ?? '—'}</span></div>
+        <div class="crash-field"><label>Silence before flag</label><span>${silence}</span></div>
+        <div class="crash-field"><label>Last program</label><span>${e.prog_name || '—'} step ${e.prog_step ?? '—'}</span></div>
+        <div class="crash-field"><label>Last voltage</label><span>${e.last_volts != null ? e.last_volts.toFixed(2)+'V' : '—'}</span></div>
+        <div class="crash-field"><label>Last current</label><span>${e.last_amps != null ? e.last_amps.toFixed(3)+'A' : '—'}</span></div>
+        <div class="crash-field"><label>Last RPM</label><span>${e.last_rpm ?? '—'}</span></div>
+        <div class="crash-field"><label>Last KV</label><span>${e.last_kv ?? '—'}</span></div>
+        <div class="crash-field"><label>Last temp</label><span>${e.last_temp != null ? e.last_temp+'°C' : '—'}</span></div>
+        <div class="crash-field"><label>Motor</label><span>${e.motor_identifier || e.motor_id || '—'}</span></div>
+      </div>
+
+      <div class="crash-section-label">SESSION HISTORY</div>
+      ${sessionsHtml}
+      ${e.notes ? `<div class="crash-notes">${e.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function formatDurationSec(sec) {
+  if (sec == null) return '—';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+async function deleteCrashEvent(eventId) {
+  if (!confirm('Delete this crash event?')) return;
+  try {
+    await fetch(API + '/api/crash-events/' + eventId, { method: 'DELETE' });
+    loadCrashLog();
+  } catch(e) { showToast('Delete failed', true); }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // LOAD SESSIONS FROM SERVER

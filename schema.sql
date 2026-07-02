@@ -278,3 +278,57 @@ JOIN sessions s ON b.session_id = s.session_id
 JOIN motors m ON b.motor_id = m.motor_id
 JOIN motor_models mm ON m.model_id = mm.model_id
 ORDER BY m.identifier, s.session_date;
+
+-- ============================================================
+-- CONNECTION TRACKING
+-- ============================================================
+
+-- One record per serial port connection. Created when the port
+-- opens, closed when it disconnects (normally or via crash).
+CREATE TABLE IF NOT EXISTS connections (
+    connection_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    ended_at            TEXT,                           -- NULL if still open / crashed
+    end_reason          TEXT,   -- 'normal' | 'crash' | 'unknown'
+    total_sessions      INTEGER NOT NULL DEFAULT 0,     -- updated as sessions complete
+    notes               TEXT
+);
+
+-- ============================================================
+-- CRASH / DATA-LOSS EVENTS
+-- ============================================================
+
+-- Logged automatically by the dashboard when serial data goes
+-- silent while a session is active (possible MBC2 crash/reset).
+CREATE TABLE IF NOT EXISTS crash_events (
+    event_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    logged_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+
+    -- Connection context
+    connection_id       INTEGER REFERENCES connections(connection_id),
+    connection_age_sec  INTEGER,        -- seconds port was open before silence
+
+    -- Session context at time of silence
+    session_id          INTEGER REFERENCES sessions(session_id),
+    session_age_sec     INTEGER,        -- seconds since recording started
+    rows_captured       INTEGER,        -- rows in session buffer at time of event
+
+    -- Last known motor state
+    prog_name           TEXT,
+    prog_step           INTEGER,
+    last_volts          REAL,
+    last_amps           REAL,
+    last_rpm            INTEGER,
+    last_kv             INTEGER,
+    last_temp           REAL,
+    motor_id            INTEGER REFERENCES motors(motor_id),
+    motor_identifier    TEXT,           -- denormalised for easy display
+
+    -- Silence details
+    silence_duration_sec INTEGER,       -- seconds of no data before event fired
+    trigger             TEXT,           -- 'silence' | 'disconnect' | 'manual'
+    notes               TEXT            -- any extra context
+);
+
+CREATE INDEX IF NOT EXISTS idx_crash_events_connection ON crash_events(connection_id);
+CREATE INDEX IF NOT EXISTS idx_connections_started ON connections(started_at);

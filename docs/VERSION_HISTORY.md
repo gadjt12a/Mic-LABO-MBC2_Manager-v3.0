@@ -1,6 +1,15 @@
 # MBC2 Dashboard — Version History
 
-## v3.3 (current)
+## v3.4 (current)
+
+- **Connection tracking** — `connections` table records each USB serial connection lifecycle
+- **Crash Log** — `crash_events` table captures full motor state on data silence
+- **Silence watchdog** — auto-detects 30+ seconds of no serial data while recording
+- **Crash Log tab** — view crash events with connection context and session history
+- **Extras dropdown** — Raw Data and Crash Log tabs grouped under Extras menu
+- **Code cleanup** — removed orphaned roster table functions and CSS
+
+## v3.3
 
 - **Phase 1: Parser hardening** — serial parser now routes lines by prefix
 - Added handlers for `STATUS:`, `PROG:`, `SETTING:`, `LOG:` message types

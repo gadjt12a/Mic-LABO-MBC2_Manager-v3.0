@@ -4,6 +4,46 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ---
 
+## [3.4.0] — 2026-07-03
+
+### Crash Log & Connection Tracking
+
+This release adds crash detection and connection lifecycle tracking for debugging MBC2 stability issues during testing.
+
+### New Features
+
+**Connection Tracking**
+- New `connections` table records each USB serial connection
+- Tracks connection start time, end time, and end reason (normal/crash)
+- Sessions linked to their parent connection for context
+
+**Crash Log**
+- New `crash_events` table captures motor state snapshots on data loss
+- Silence watchdog monitors for 30+ seconds of no serial data during recording
+- Auto-logs crash event with full state: voltage, current, RPM, kV, temp, program step
+- Crash Log tab shows all events with connection context and session history
+- Delete individual crash events
+
+**UI Improvements**
+- New **Extras** dropdown menu in tab bar
+- Raw Data and Crash Log tabs moved under Extras to declutter main navigation
+- Main tabs now: Charts, Programs, Motors, Settings
+
+### Code Cleanup
+
+- Removed orphaned roster table code (filterRoster, sortRoster, renderRoster)
+- Removed unused CSS classes for roster table
+- Simplified loadRoster() to only fetch data for rating badges
+- Added setActiveMotorFromDetail() to replace removed function
+
+### Database
+
+- Added `connections` table with auto-migration
+- Added `crash_events` table with auto-migration
+- Updated DB_SCHEMA.md documentation
+
+---
+
 ## [3.3.0] — 2026-07-01
 
 ### Bidirectional Device Control

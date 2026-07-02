@@ -42,6 +42,13 @@ Data logger, program library, motor registry, and **full bidirectional device co
 - CSV export available on demand
 - Firmware version checker and download links
 
+### Crash Log & Connection Tracking (NEW in v3.4)
+- **Silence watchdog** — auto-detects when serial data stops for 30+ seconds
+- **Crash events** — captures full motor state snapshot (voltage, current, RPM, temp, program step)
+- **Connection tracking** — records each USB connection lifecycle with start/end times
+- **Crash Log tab** — view all crash events with connection context and session history
+- **Extras dropdown** — Raw Data and Crash Log tabs now grouped under Extras menu
+
 ## Requirements
 
 - Python 3.8 or higher

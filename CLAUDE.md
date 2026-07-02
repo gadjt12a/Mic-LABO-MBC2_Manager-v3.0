@@ -22,12 +22,14 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 ---
 
-## Current version: v3.3
+## Current version: v3.4
 
 See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 
 Key architectural facts:
 - Fully DB-only storage (no CSV files). All session data goes to SQLite.
+- `connections` table tracks device connection lifecycle.
+- `crash_events` table captures motor state snapshots on data silence.
 - `connections` table tracks device connection lifecycle.
 - `sessions` table has `connection_id` FK, `duration_sec`, `end_reason`.
 - `crash_events` table captures full motor state snapshots on unexpected silence.

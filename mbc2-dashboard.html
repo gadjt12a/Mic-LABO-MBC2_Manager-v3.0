@@ -1324,6 +1324,8 @@ async function deviceStart() {
     startRecording();
   }
   await sendCommand('START');
+  const v = parseFloat(document.getElementById('voltageSlider').value);
+  if (v > 0) await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
 }
 
 // START_PROG:n
@@ -1338,6 +1340,8 @@ async function deviceStartProg() {
     startRecording();
   }
   await sendCommand('START_PROG:' + progNo);
+  const v = parseFloat(document.getElementById('voltageSlider').value);
+  if (v > 0) await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
 }
 
 // STOP

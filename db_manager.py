@@ -23,8 +23,38 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _seed_motor_models(conn):
+    """Insert canonical motor models if not already present. Safe to run on existing DBs."""
+    models = [
+        ('Stock (Mabuchi)',   'STK-M', 'Single', 1.0, 1.0, 'Box Stock',                         'Mabuchi variant. High speed bias.'),
+        ('Stock (SMC)',       'STK-S', 'Single', 1.0, 1.0, 'Box Stock',                         'SMC variant. High torque bias.'),
+        ('Rev-Tuned 2',       'RT2',   'Single', 2.5, 1.0, 'Basic, Tuned, BMax, Advanced, Open', None),
+        ('Atomic-Tuned 2',   'AT2',   'Single', 1.5, 1.5, 'Basic, Tuned, BMax, Advanced, Open', None),
+        ('Torque-Tuned 2',   'TT2',   'Single', 1.0, 2.5, 'Basic, Tuned, BMax, Advanced, Open', None),
+        ('Light-Dash',        'LD',    'Single', 2.5, 2.5, 'Basic, BMax, Advanced, Open',        None),
+        ('Hyper-Dash 3',      'HD3',   'Single', 3.0, 3.0, 'BMax, Advanced, Open',               None),
+        ('Power-Dash',        'PD',    'Single', 3.0, 3.5, 'BMax, Advanced, Open',               None),
+        ('Sprint-Dash',       'SD',    'Single', 4.0, 2.5, 'BMax, Advanced, Open',               None),
+        ('Ultra-Dash',        'UD',    'Single', 4.0, 3.5, 'Open',                               None),
+        ('Plasma-Dash',       'PLD',   'Single', 4.0, 4.0, 'None',                               'Exhibition/display only. Not competition legal.'),
+        ('Stock Dual Shaft',  'STK-D', 'Dual',   1.0, 1.0, 'Box Stock',                         'Included with MA chassis kits.'),
+        ('Rev-Tuned 2 PRO',   'RT2-P', 'Dual',   2.5, 1.0, 'Basic, Tuned, BMax, Advanced, Open', 'PRO dual shaft variant.'),
+        ('Atomic-Tuned 2 PRO','AT2-P', 'Dual',   1.5, 1.5, 'Basic, Tuned, BMax, Advanced, Open', 'PRO dual shaft variant.'),
+        ('Torque-Tuned 2 PRO','TT2-P', 'Dual',   1.0, 2.5, 'Basic, Tuned, BMax, Advanced, Open', 'PRO dual shaft variant.'),
+        ('Light-Dash PRO',    'LD-P',  'Dual',   2.5, 2.5, 'Basic, BMax, Advanced, Open',        'PRO dual shaft variant.'),
+        ('Hyper-Dash PRO',    'HD3-P', 'Dual',   3.0, 3.0, 'BMax, Advanced, Open',               'PRO dual shaft variant.'),
+        ('Mach-Dash PRO',     'MD-P',  'Dual',   3.0, 3.0, 'BMax, Advanced, Open',               'PRO dual shaft variant.'),
+        ('Kit Standard',      'KS',    'Single', 1.0, 1.0, 'Box Stock',                         'Single-shaft motor bundled with kit.'),
+        ('Kit Standard PRO',  'KS-P',  'Dual',   1.0, 1.0, 'Box Stock',                         'Dual-shaft motor bundled with MA/MS chassis kits.'),
+    ]
+    conn.executemany("""
+        INSERT OR IGNORE INTO motor_models (name, code, shaft_type, speed_stars, torque_stars, legal_classes, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, models)
+
+
 def init_db():
-    """Initialise the database from schema if it doesn't exist."""
+    """Initialise the database from schema if it doesn't exist, then seed canonical data."""
     if not DB_PATH.exists():
         print(f"Creating new database at {DB_PATH}")
         with get_connection() as conn:
@@ -33,6 +63,10 @@ def init_db():
         print("Database initialised successfully.")
     else:
         print(f"Database already exists at {DB_PATH}")
+
+    with get_connection() as conn:
+        _seed_motor_models(conn)
+        print("Motor models seeded.")
 
 
 # ============================================================

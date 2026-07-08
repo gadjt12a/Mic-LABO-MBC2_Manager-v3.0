@@ -88,7 +88,9 @@ INSERT INTO motor_models (name, code, shaft_type, speed_stars, torque_stars, leg
     ('Torque-Tuned 2 PRO','TT2-P','Dual',   1.0, 2.5,  'Basic, Tuned, BMax, Advanced, Open', 'PRO dual shaft variant.'),
     ('Light-Dash PRO',   'LD-P',  'Dual',   2.5, 2.5,  'Basic, BMax, Advanced, Open', 'PRO dual shaft variant.'),
     ('Hyper-Dash PRO',   'HD3-P', 'Dual',   3.0, 3.0,  'BMax, Advanced, Open',    'PRO dual shaft variant.'),
-    ('Mach-Dash PRO',    'MD-P',  'Dual',   3.0, 3.0,  'BMax, Advanced, Open',    'PRO dual shaft variant.');
+    ('Mach-Dash PRO',    'MD-P',  'Dual',   3.0, 3.0,  'BMax, Advanced, Open',    'PRO dual shaft variant.'),
+    ('Kit Standard',     'KS',    'Single', 1.0, 1.0,  'Box Stock',               'Single-shaft motor bundled with kit.'),
+    ('Kit Standard PRO', 'KS-P',  'Dual',   1.0, 1.0,  'Box Stock',               'Dual-shaft motor bundled with MA/MS chassis kits.');
 
 -- ============================================================
 -- MOTOR REGISTRY

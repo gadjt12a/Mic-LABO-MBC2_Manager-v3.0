@@ -4,6 +4,47 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ---
 
+## [3.4.1] — 2026-07-20
+
+### Code Review Fixes & UX Polish
+
+Full code review pass: critical session-save bug fixed, server hardened, UX improved.
+
+### Fixed
+
+- **Session save flow** — telemetry rows never reached the database (missing
+  `session_id` binding caused every save to fail after the session record was
+  created), and each recorded run created two session records. Rows, benchmarks,
+  and CSV export now converge on one session. Empty duplicate records cleaned out.
+- **Settings tab program read** — reading a program slot from the device now
+  actually displays it (was rendering into a non-existent element).
+- Motor identifier numbering past 99 (was a string sort).
+- Settings-loaded toast count derived from metadata instead of hardcoded 10.
+
+### Changed
+
+- Server binds `127.0.0.1` only (was all interfaces with open CORS) and serves
+  requests on threads so the firmware-version fetch can't freeze the app.
+- `mbc2.db` removed from git; `*.db` ignored (privacy: personal data and
+  imported club programs must never be published).
+- Native `confirm()`/`alert()` replaced with styled modals; destructive actions
+  get red action-specific buttons.
+
+### New
+
+- Server health dot in header (polls `/api/ping`); loud toast when the backend
+  goes offline.
+- Tab-close protection: warning mid-recording; connection record closed via
+  `sendBeacon` on tab close.
+- Chart axis labels (scale max/mid + visible time span).
+- UI Scale control (90–125%) in Extras menu.
+- Voltage slider clamps to the device's `limit_volt` after settings are read.
+- `_add_column_if_missing()` migration helper; dead code removed
+  (`parse_mbc2_row` and friends).
+- `DEPLOYMENT_PLAN.md` — draft v4 packaging plan (Windows installer / USB / Mac).
+
+---
+
 ## [3.4.0] — 2026-07-03
 
 ### Crash Log & Connection Tracking

@@ -22,7 +22,11 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 ---
 
-## Current version: v3.4
+## Current version: v3.4.1
+
+Packaging for v4 (Windows installer / USB standalone / Mac zip) is planned —
+see [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md). Note: a native desktop window
+(pywebview/WebView2) is **not** possible — WebView2 lacks Web Serial support.
 
 See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 

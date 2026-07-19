@@ -1,6 +1,15 @@
 # MBC2 Dashboard — Version History
 
-## v3.4 (current)
+## v3.4.1 (current)
+
+- **Session save fix** — telemetry rows now persist; duplicate session records eliminated; CSV export no longer empty
+- **Server hardening** — localhost-only bind, threaded request handling
+- **Settings tab fix** — device program reads now display
+- **Safety/UX** — tab-close warning, server health indicator, styled confirm dialogs, chart axis labels, UI scale control, device-driven voltage limit
+- **Repo hygiene** — `mbc2.db` untracked from git; `*.db` ignored
+- **Packaging** — `DEPLOYMENT_PLAN.md` drafted for v4 (installer / USB / Mac)
+
+## v3.4
 
 - **Connection tracking** — `connections` table records each USB serial connection lifecycle
 - **Crash Log** — `crash_events` table captures full motor state on data silence

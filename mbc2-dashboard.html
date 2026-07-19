@@ -1072,7 +1072,6 @@ const RUN_STATE_MAP = {
 };
 
 // Bidirectional command/response state
-let pendingCommands = [];  // Queue of commands awaiting ACK
 let deviceSettings = {};   // Cached device settings from GET_SETTING
 let devicePrograms = {};   // Cached programs from GET_PROG
 
@@ -1843,26 +1842,6 @@ async function saveToEeprom() {
   await sendCommand('SAVE');
 }
 
-// UI handlers for program sync
-async function onGetProgClick() {
-  const progNo = parseInt(document.getElementById('syncProgNo').value);
-  await requestProgram(progNo);
-}
-
-async function onSetProgClick() {
-  const progNo = parseInt(document.getElementById('syncProgNo').value);
-  const prog = devicePrograms[progNo];
-
-  if (!prog) {
-    showToast('Read program ' + progNo + ' first before writing', true);
-    return;
-  }
-
-  if (await sendProgram(progNo, prog)) {
-    showToast('Program ' + progNo + ' written to device RAM (not saved)');
-  }
-}
-
 function updateProgramEditorDisplay(progNo) {
   const prog = devicePrograms[progNo];
   const display = document.getElementById('settingsSyncDisplay');
@@ -2429,9 +2408,6 @@ function startCooldown(durationSec) {
     }
   }, 500);
 }
-
-// Step start time tracking
-window.stepStartTimes = {};
 
 function getActiveProgramDisplay() {
   const profile = programLibrary.profiles.find(p => p.id === activeProfileId);
@@ -3437,7 +3413,7 @@ function clearDisplay() {
   chartData = { rpm:[],amps:[],kv:[],temp:[],labels:[] };
   document.getElementById('logBody').innerHTML = ''; logRowCount = 0; rawCount = 0; sessionData = [];
   state.maxRpm=0; state.maxAmps=0; state.maxKv=0; state.maxTemp=0;
-  window.stepStartTimes = {}; prevStepForCool = 0; prevVolts = 0;
+  prevStepForCool = 0; prevVolts = 0;
   clearInterval(cooldownInterval); cooldownActive = false;
   document.getElementById('cooldownRow').style.display = 'none';
   document.getElementById('rawCount').textContent = '0';

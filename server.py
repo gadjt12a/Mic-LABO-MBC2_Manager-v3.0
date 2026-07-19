@@ -344,9 +344,17 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
 
 
 # ── Main ──────────────────────────────────────────────────────
+class MBC2Server(socketserver.ThreadingTCPServer):
+    # Threaded so slow requests (e.g. the 3s firmware proxy) don't
+    # freeze the dashboard. Safe: db_manager opens a fresh SQLite
+    # connection per call and the DB runs in WAL mode.
+    allow_reuse_address = True   # must be set before bind
+    daemon_threads = True
+
+
 if __name__ == '__main__':
-    with socketserver.TCPServer(('', PORT), MBC2Handler) as httpd:
-        httpd.allow_reuse_address = True
+    # Localhost only — API has permissive CORS and must not be LAN-reachable
+    with MBC2Server(('127.0.0.1', PORT), MBC2Handler) as httpd:
         url = f'http://localhost:{PORT}'
         print(f'[MBC2] Server running at {url}')
         print(f'[MBC2] Press Ctrl+C to stop manually')

@@ -322,48 +322,6 @@ def export_session_csv(session_id: int):
     return buf.getvalue()
 
 
-def parse_mbc2_row(raw_line: str, session_id: int, timestamp_ms: int):
-    """
-    Parse a raw CSV line from the MBC2 serial stream into a session_data dict.
-    Returns None if the line is malformed.
-
-    MBC2 column layout (0-indexed):
-      0  program_no   1  mode (MANU/PROG)   5  step
-      10 rpm          11 voltage_mv         13 current_raw
-      14 elapsed      15 rpm_cap            18 temp_c
-      19 amps (float -> converted to milliamps)
-    """
-    parts = raw_line.strip().split(',')
-    if len(parts) < 20:
-        return None
-    try:
-        rpm          = int(parts[10])
-        voltage_mv   = int(parts[11])
-        current_ma   = round(float(parts[19]) * 1000)
-        temp_c       = float(parts[18])
-        elapsed_sec  = int(parts[14])
-        rpm_cap      = int(parts[15])
-        mode         = parts[1].strip()
-        program_step = int(parts[5])
-        kv = round(rpm / (voltage_mv / 1000), 1) if voltage_mv > 0 else 0
-        return {
-            'session_id':    session_id,
-            'timestamp_ms':  timestamp_ms,
-            'raw_line':      raw_line.strip(),
-            'mode':          mode,
-            'program_step':  program_step,
-            'voltage_mv':    voltage_mv,
-            'current_ma':    current_ma,
-            'rpm':           rpm,
-            'temp_c':        temp_c,
-            'elapsed_sec':   elapsed_sec,
-            'rpm_cap':       rpm_cap,
-            'kv_efficiency': kv,
-        }
-    except (ValueError, IndexError):
-        return None
-
-
 # ============================================================
 # BENCHMARKS
 # ============================================================
@@ -717,17 +675,6 @@ def get_motor_breakin_history(motor_id: int) -> list:
             ORDER BY mbl.date_run, pg.step_order
         """, (motor_id,)).fetchall()
         return [dict(r) for r in rows]
-    init_db()
-    print("\nMotor models loaded:")
-    for m in get_all_motor_models():
-        print(f"  {m['code']:8} {m['name']}")
-    
-    print("\nChassis loaded:")
-    from itertools import groupby
-    chassis = get_chassis_for_shaft_type('Single')
-    print(f"  Single shaft: {', '.join(c['name'] for c in chassis)}")
-    chassis = get_chassis_for_shaft_type('Dual')
-    print(f"  Dual shaft:   {', '.join(c['name'] for c in chassis)}")
 
 
 def get_motor_sessions(motor_id: int) -> list:
@@ -826,17 +773,6 @@ def close_connection(connection_id: int, end_reason: str = 'normal') -> None:
             SET ended_at = datetime('now'), end_reason = ?
             WHERE connection_id = ?
         """, (end_reason, connection_id))
-        conn.commit()
-
-
-def increment_connection_sessions(connection_id: int) -> None:
-    """Bump the session counter for a connection."""
-    with get_connection() as conn:
-        _ensure_connections_table(conn)
-        conn.execute("""
-            UPDATE connections SET total_sessions = total_sessions + 1
-            WHERE connection_id = ?
-        """, (connection_id,))
         conn.commit()
 
 

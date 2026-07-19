@@ -692,6 +692,15 @@
         <div class="extras-menu">
           <button class="extras-item" onclick="switchTab('raw')" id="tabRaw">⚡ Raw Data</button>
           <button class="extras-item" onclick="switchTab('crashlog')" id="tabCrashlog">🛑 Crash Log</button>
+          <div style="border-top:1px solid var(--border2);padding:8px 16px;font-family:var(--display);font-weight:600;font-size:10px;letter-spacing:1px;color:var(--text3);">
+            UI SCALE
+            <div style="display:flex;gap:4px;margin-top:6px;">
+              <button class="btn" style="flex:1;padding:3px 0;font-size:10px;" onclick="setUiScale(90)">90%</button>
+              <button class="btn" style="flex:1;padding:3px 0;font-size:10px;" onclick="setUiScale(100)">100%</button>
+              <button class="btn" style="flex:1;padding:3px 0;font-size:10px;" onclick="setUiScale(110)">110%</button>
+              <button class="btn" style="flex:1;padding:3px 0;font-size:10px;" onclick="setUiScale(125)">125%</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1030,6 +1039,22 @@
       <button class="drawer-close" onclick="document.getElementById('motorDetailModal').classList.remove('open')">✕ Close</button>
     </div>
     <div id="motorDetailBody" style="padding:16px;"></div>
+  </div>
+</div>
+
+<!-- CONFIRM / ALERT MODAL -->
+<div class="guide-modal" id="confirmModal" style="z-index:400;">
+  <div class="guide-box" style="width:420px;">
+    <div class="guide-box-header">
+      <div class="guide-box-title" id="confirmTitle">Confirm</div>
+    </div>
+    <div class="guide-body">
+      <div id="confirmMessage" style="font-size:12px;line-height:1.6;white-space:pre-line;color:var(--text);"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn" id="confirmCancelBtn">Cancel</button>
+        <button class="btn primary" id="confirmOkBtn">OK</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1381,7 +1406,7 @@ async function deviceResume() {
 
 // NEXT_STEP (with confirmation)
 async function deviceNextStep() {
-  if (!confirm('Skip to next step? This cannot be undone.')) return;
+  if (!(await appConfirm('Skip to next step? This cannot be undone.', { danger: true, okLabel: 'Skip Step' }))) return;
   await sendCommand('NEXT_STEP');
 }
 
@@ -1403,7 +1428,8 @@ function onVoltageSliderChange() {
 function onVoltageInputChange() {
   let v = parseFloat(document.getElementById('voltageInput').value);
   if (isNaN(v)) v = 0;
-  v = Math.max(0, Math.min(9.0, v));
+  const vmax = parseFloat(document.getElementById('voltageSlider').max) || 9.0;
+  v = Math.max(0, Math.min(vmax, v));
   document.getElementById('voltageInput').value = v.toFixed(1);
   document.getElementById('voltageSlider').value = v;
   debouncedSendVoltage(v);
@@ -1840,7 +1866,8 @@ async function sendProgram(progNo, prog) {
 
 // Save all RAM changes to EEPROM (with warning)
 async function saveToEeprom() {
-  if (!confirm('Save to EEPROM?\n\nThis writes all program and setting changes to permanent storage.\n\nEEPROM has limited write cycles — avoid saving repeatedly.')) {
+  if (!(await appConfirm('This writes all program and setting changes to permanent storage.\n\nEEPROM has limited write cycles — avoid saving repeatedly.',
+                         { title: 'Save to EEPROM?', danger: true, okLabel: 'Save to EEPROM' }))) {
     return;
   }
   await sendCommand('SAVE');
@@ -1909,6 +1936,17 @@ function handleSettingMessage(line) {
   console.log('[MBC2] Setting:', key, '=', value);
   deviceSettings[key] = value;
   settingsReceived++;
+
+  // Clamp the voltage slider to the device's actual max voltage limit
+  if (key === 'limit_volt' && value > 0) {
+    const vmax = (value * 0.1).toFixed(1);
+    const slider = document.getElementById('voltageSlider');
+    const input = document.getElementById('voltageInput');
+    slider.max = vmax; input.max = vmax;
+    if (parseFloat(input.value) > parseFloat(vmax)) {
+      input.value = vmax; slider.value = vmax;
+    }
+  }
 
   // Update settings panel if visible
   updateSettingsDisplay();
@@ -2435,13 +2473,29 @@ function updateCharts() {
     chartData.kv.shift(); chartData.temp.shift(); chartData.labels.shift();
   }
 
-  drawChart('chartRpm',  chartData.rpm,  '#00e5ff', null, true);
-  drawChart('chartAmps', chartData.amps, '#ff6b00', 5);
-  drawChart('chartKv',   chartData.kv,   '#39ff14', null);
-  drawChart('chartTemp', chartData.temp, '#ffcc00', 50);
+  const n = chartData.labels.length;
+  const spanSec = n > 1 ? (chartData.labels[n-1] - chartData.labels[0]) / 1000 : 0;
+  drawChart('chartRpm',  chartData.rpm,  '#00e5ff', null, true, spanSec);
+  drawChart('chartAmps', chartData.amps, '#ff6b00', 5,    false, spanSec);
+  drawChart('chartKv',   chartData.kv,   '#39ff14', null, false, spanSec);
+  drawChart('chartTemp', chartData.temp, '#ffcc00', 50,   false, spanSec);
 }
 
-function drawChart(id, data, color, dangerThreshold, filled) {
+function fmtAxisVal(v) {
+  if (v >= 10000) return (v / 1000).toFixed(1) + 'k';
+  if (v >= 100) return String(Math.round(v));
+  return String(Math.round(v * 10) / 10);
+}
+
+function fmtAxisSpan(sec) {
+  if (sec >= 60) {
+    const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+    return m + 'm' + (s ? ' ' + s + 's' : '');
+  }
+  return Math.round(sec) + 's';
+}
+
+function drawChart(id, data, color, dangerThreshold, filled, spanSec) {
   const canvas = document.getElementById(id);
   const ctx = canvas.getContext('2d');
   const W = canvas.offsetWidth;
@@ -2488,6 +2542,19 @@ function drawChart(id, data, color, dangerThreshold, filled) {
   ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
   ctx.beginPath(); ctx.arc(lx,ly,3,0,Math.PI*2); ctx.fill();
   ctx.shadowBlur = 0;
+
+  // Axis labels — scale max and midpoint left, visible time span bottom-right
+  ctx.font = '9px Consolas, monospace';
+  ctx.fillStyle = '#5c6b7a';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText(fmtAxisVal(max), 4, 3);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fmtAxisVal(max / 2), 4, H / 2);
+  if (spanSec > 0) {
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText('last ' + fmtAxisSpan(spanSec), W - 4, H - 2);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2733,7 +2800,7 @@ function renderSessionList() {
 }
 
 async function deleteSession(name) {
-  if (!confirm('Delete session: ' + name + '?')) return;
+  if (!(await appConfirm('Delete session: ' + name + '?', { danger: true, okLabel: 'Delete' }))) return;
   const session = allSessions[name];
   delete allSessions[name];
   // Delete from DB using session_id if available
@@ -3056,8 +3123,8 @@ function saveProfileEdit(profileId) {
   if (typeof refreshAll === 'function') refreshAll();
 }
 
-function deleteProfile(profileId) {
-  if (!confirm('Delete this profile and all its programs?')) return;
+async function deleteProfile(profileId) {
+  if (!(await appConfirm('Delete this profile and all its programs?', { danger: true, okLabel: 'Delete' }))) return;
   programLibrary.profiles = programLibrary.profiles.filter(p => p.id !== profileId);
   if (activeProfileId === profileId) { activeProfileId = null; activeProgramId = null; updateActiveProgramDisplay(); }
   saveLibrary(); renderDrawer(); renderProgramsTab(); buildProgSelector();
@@ -3178,8 +3245,8 @@ function saveProgramEdit(profileId, programId) {
   if (typeof refreshAll === 'function') refreshAll();
 }
 
-function deleteProgram(profileId, programId) {
-  if (!confirm('Delete this program?')) return;
+async function deleteProgram(profileId, programId) {
+  if (!(await appConfirm('Delete this program?', { danger: true, okLabel: 'Delete' }))) return;
   const profile = programLibrary.profiles.find(p => p.id === profileId);
   if (!profile) return;
   profile.programs = profile.programs.filter(p => p.id !== programId);
@@ -3447,6 +3514,43 @@ function showToast(msg, error) {
 }
 
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Styled replacements for native confirm()/alert()
+function appConfirm(message, opts = {}) {
+  return new Promise(resolve => {
+    const modal = document.getElementById('confirmModal');
+    const okBtn = document.getElementById('confirmOkBtn');
+    const cancelBtn = document.getElementById('confirmCancelBtn');
+    document.getElementById('confirmTitle').textContent = opts.title || 'Confirm';
+    document.getElementById('confirmMessage').textContent = message;
+    okBtn.className = 'btn ' + (opts.danger ? 'danger' : 'primary');
+    okBtn.textContent = opts.okLabel || 'OK';
+    cancelBtn.style.display = opts.alertOnly ? 'none' : '';
+    modal.classList.add('open');
+    const onKey = e => { if (e.key === 'Escape') done(false); };
+    const done = val => {
+      modal.classList.remove('open');
+      okBtn.onclick = cancelBtn.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(val);
+    };
+    okBtn.onclick = () => done(true);
+    cancelBtn.onclick = () => done(false);
+    document.addEventListener('keydown', onKey);
+    okBtn.focus();
+  });
+}
+
+function appAlert(message, title) {
+  return appConfirm(message, { title: title || 'Notice', alertOnly: true });
+}
+
+// UI scale — Chrome-only app, so CSS zoom is safe
+function setUiScale(pct) {
+  document.body.style.zoom = pct + '%';
+  localStorage.setItem('mbc2_ui_scale', pct);
+  showToast('UI scale ' + pct + '%');
+}
 
 // ═══════════════════════════════════════════════════════════════
 // INIT
@@ -4368,7 +4472,7 @@ function mrCloseDetail() {
 }
 
 async function mrDeleteMotor(motorId, identifier) {
-  if (!confirm('Delete motor ' + identifier + '?\nThis will also delete all its sessions and benchmarks.')) return;
+  if (!(await appConfirm('Delete motor ' + identifier + '?\nThis will also delete all its sessions and benchmarks.', { danger: true, okLabel: 'Delete Motor' }))) return;
   try {
     const res = await fetch(API + '/api/motors/' + identifier, { method: 'DELETE' });
     const data = res.ok ? await res.json() : null;
@@ -4392,7 +4496,7 @@ async function mrDeleteMotor(motorId, identifier) {
 }
 
 async function mrDeleteSession(sessionId, motorId) {
-  if (!confirm('Delete this session record?')) return;
+  if (!(await appConfirm('Delete this session record?', { danger: true, okLabel: 'Delete' }))) return;
   try {
     const res = await fetch(API + '/api/motors/session/' + sessionId, { method: 'DELETE' });
     const data = res.ok ? await res.json() : null;
@@ -4863,7 +4967,7 @@ function setActiveMotorFromDetail(motorId, identifier) {
 }
 
 async function clearMotorSessions(identifier) {
-  if (!confirm('Clear ALL session history for ' + identifier + '?\nThis cannot be undone.')) return;
+  if (!(await appConfirm('Clear ALL session history for ' + identifier + '?\nThis cannot be undone.', { danger: true, okLabel: 'Clear History' }))) return;
   const res = await fetch(API + '/api/motors/' + identifier + '/sessions/clear', { method: 'DELETE' });
   const data = res.ok ? await res.json() : null;
   if (data?.ok) {
@@ -4876,7 +4980,7 @@ async function clearMotorSessions(identifier) {
 }
 
 async function retireMotor(identifier) {
-  if (!confirm('Retire motor ' + identifier + '? This marks it as retired in the DB.')) return;
+  if (!(await appConfirm('Retire motor ' + identifier + '? This marks it as retired in the DB.', { okLabel: 'Retire' }))) return;
   const res = await apiPost('/api/motors/' + identifier + '/status', { status: 'Retired' });
   if (res?.success) {
     showToast(identifier + ' retired');
@@ -5288,7 +5392,7 @@ function formatDurationSec(sec) {
 }
 
 async function deleteCrashEvent(eventId) {
-  if (!confirm('Delete this crash event?')) return;
+  if (!(await appConfirm('Delete this crash event?', { danger: true, okLabel: 'Delete' }))) return;
   try {
     await fetch(API + '/api/crash-events/' + eventId, { method: 'DELETE' });
     loadCrashLog();
@@ -5333,7 +5437,7 @@ async function loadServerSessions() {
 // ═══════════════════════════════════════════════════════════════
 async function closeApp() {
   if (recording) {
-    if (!confirm('Session is recording. Stop recording and close?')) return;
+    if (!(await appConfirm('Session is recording. Stop recording and close?', { danger: true, okLabel: 'Stop & Close' }))) return;
     stopRecording();
   }
   if (port) {
@@ -5345,7 +5449,7 @@ async function closeApp() {
     await fetch(API + '/api/shutdown');
   } catch(e) {}
   setTimeout(() => {
-    alert('Server stopped. You can now close this tab.');
+    appAlert('Server stopped. You can now close this tab.', 'Server Stopped');
   }, 800);
 }
 
@@ -5387,6 +5491,8 @@ window.addEventListener('load', () => {
   loadRegisteredMotors();
   checkServerHealth();
   setInterval(checkServerHealth, 5000);
+  const savedScale = parseInt(localStorage.getItem('mbc2_ui_scale'));
+  if (savedScale && savedScale !== 100) document.body.style.zoom = savedScale + '%';
   window.addEventListener('resize', () => {
     if (chartData.rpm.length) {
       drawChart('chartRpm',chartData.rpm,'#00e5ff',null,true);

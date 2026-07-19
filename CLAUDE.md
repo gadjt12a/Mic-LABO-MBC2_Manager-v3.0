@@ -12,7 +12,7 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 | Layer | Technology |
 |---|---|
-| Backend | Python, Flask |
+| Backend | Python stdlib `http.server` (no external dependencies) |
 | Frontend | Vanilla JS, single HTML file (`mbc2-dashboard.html`) |
 | Database | SQLite (`mbc2.db`) |
 | Serial | Web Serial API (Chrome only, 115200 baud) |
@@ -28,8 +28,6 @@ See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 
 Key architectural facts:
 - Fully DB-only storage (no CSV files). All session data goes to SQLite.
-- `connections` table tracks device connection lifecycle.
-- `crash_events` table captures motor state snapshots on data silence.
 - `connections` table tracks device connection lifecycle.
 - `sessions` table has `connection_id` FK, `duration_sec`, `end_reason`.
 - `crash_events` table captures full motor state snapshots on unexpected silence.
@@ -84,11 +82,11 @@ Key architectural facts:
 - **The Christchurch club break-in programs (PMPE, SPRF) are private club knowledge.** They must NEVER be included in `default_programs.json` or any seed data shipped with the app. They are distributed only as a separate importable `christchurch_protocol.json`.
 - **Motor identifiers follow the format `MODEL-DIRECTION-NUMBER`** (e.g. `SD-R-01`). Sequential numbering resets per model code.
 
-### Flask route ordering
+### API route ordering
 
-- In `motor_api.py`, specific routes must be defined **before** generic catch-all routes.
+- Routes are matched by an if-chain in `motor_api.py`'s `handle_motor_api()` — specific routes must be checked **before** generic catch-all routes.
 - The generic `GET /api/motors/<identifier>` must come **after** routes like `/api/motors/roster`.
-- Violating this causes Flask to intercept specific routes with the generic handler.
+- Violating this causes the generic handler to intercept specific routes (e.g. treating `roster` as a motor identifier).
 
 ### Data columns — common mistakes
 

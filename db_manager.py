@@ -23,6 +23,17 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _add_column_if_missing(conn, table: str, column: str, decl: str):
+    """
+    Add a column to an existing table if it isn't there yet.
+    This is the required migration path for new columns — never use a
+    raw ALTER TABLE ADD COLUMN without this guard (see CLAUDE.md).
+    """
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+
+
 def _seed_motor_models(conn):
     """Insert canonical motor models if not already present. Safe to run on existing DBs."""
     models = [
@@ -80,19 +91,19 @@ def get_next_motor_identifier(model_code: str, direction: str) -> str:
     """
     with get_connection() as conn:
         prefix = f"{model_code}-{direction}-"
-        result = conn.execute("""
-            SELECT identifier FROM motors
-            WHERE identifier LIKE ?
-            ORDER BY identifier DESC
-            LIMIT 1
-        """, (f"{prefix}%",)).fetchone()
+        rows = conn.execute(
+            "SELECT identifier FROM motors WHERE identifier LIKE ?",
+            (f"{prefix}%",)
+        ).fetchall()
 
-        if result is None:
-            return f"{prefix}01"
-        
-        last = result['identifier']
-        last_num = int(last.split('-')[-1])
-        return f"{prefix}{str(last_num + 1).zfill(2)}"
+        # Compare suffixes numerically — a string sort puts 100 before 99
+        max_num = 0
+        for r in rows:
+            try:
+                max_num = max(max_num, int(r['identifier'].rsplit('-', 1)[-1]))
+            except ValueError:
+                continue
+        return f"{prefix}{str(max_num + 1).zfill(2)}"
 
 
 def register_motor(model_code: str, direction: str, chassis_ids: list = None, notes: str = None) -> dict:

@@ -608,6 +608,10 @@
   </div>
   <div class="header-right">
     <div id="runIndicator" class="running-indicator" style="display:none;color:var(--accent2);">● RECORDING</div>
+    <div title="Backend server — sessions cannot be saved while offline">
+      <span class="status-dot" id="serverDot"></span>
+      <span class="status-label">Server</span>
+    </div>
     <div>
       <span class="status-dot" id="statusDot"></span>
       <span class="status-label" id="statusLabel">Disconnected</span>
@@ -980,7 +984,7 @@
 
 <!-- FOOTER -->
 <div class="footer">
-  <span>MBC2 Dashboard v0.3.0 — mic-LABO Motor Boot Camp 2</span>
+  <span>MBC2 Dashboard v3.4 — mic-LABO Motor Boot Camp 2</span>
   <span>Frames: <span class="raw-count" id="rawCount">0</span> &nbsp;|&nbsp; Session: <span class="raw-count" id="sessionCount">0</span> rows</span>
 </div>
 
@@ -1910,7 +1914,7 @@ function handleSettingMessage(line) {
   updateSettingsDisplay();
 
   // Show toast when all settings received
-  if (settingsReceived === 10) {
+  if (settingsReceived >= Object.keys(SETTINGS_META).length) {
     showToast('Device settings loaded');
     settingsReceived = 0;
   }
@@ -2717,11 +2721,13 @@ function renderSessionList() {
       s.peak_rpm ? s.peak_rpm.toLocaleString() + ' RPM' : null,
       s.row_count ? s.row_count + ' rows' : (s.data && s.data.length ? s.data.length + ' rows' : null)
     ].filter(Boolean).join(' · ');
+    // Escape for JS string inside the onclick attr, then HTML-escape the lot
+    const jsKey = escHtml(k.replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
     return `
-    <div class="session-chip" onclick="loadSessionIntoView('${k}')">
-      <div style="font-weight:600">${k}</div>
-      ${meta ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${meta}</div>` : ''}
-      <span class="chip-del" onclick="event.stopPropagation();deleteSession('${k}')">✕</span>
+    <div class="session-chip" onclick="loadSessionIntoView('${jsKey}')">
+      <div style="font-weight:600">${escHtml(k)}</div>
+      ${meta ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(meta)}</div>` : ''}
+      <span class="chip-del" onclick="event.stopPropagation();deleteSession('${jsKey}')">✕</span>
     </div>`;
   }).join('');
 }
@@ -3973,7 +3979,7 @@ function mrRenderSubprogs() {
     <div class="mr-spcard" id="mr-sp-${p.program_id}" onclick="mrToggleProg(${p.program_id},'${p.name}','${p.mbc2_label}')">
       <div class="mr-sp-name">${p.name}</div>
       <div class="mr-sp-label">MBC2: ${p.mbc2_label || '—'}</div>
-      <div class="mr-sp-note">${p.notes || ''}</div>
+      <div class="mr-sp-note">${escHtml(p.notes || '')}</div>
       <div class="mr-sp-badge" id="mr-spb-${p.program_id}" style="display:none"></div>
     </div>`).join('');
 }
@@ -3988,7 +3994,7 @@ function mrRenderSeq() {
   let h = '';
   MR.sel.progs.forEach((p, i) => {
     if (i > 0) h += '<span class="mr-seq-arrow">&#8594;</span>';
-    h += `<div class="mr-seq-chip">${p.name}<span class="mr-rm" onclick="mrRemoveProg(${p.id})">&#x2715;</span></div>`;
+    h += `<div class="mr-seq-chip">${escHtml(p.name)}<span class="mr-rm" onclick="mrRemoveProg(${p.id})">&#x2715;</span></div>`;
   });
   row.innerHTML = h;
 }
@@ -5255,18 +5261,18 @@ async function loadCrashLog() {
         <div class="crash-field"><label>Session age</label><span>${sessAge}</span></div>
         <div class="crash-field"><label>Rows captured</label><span>${e.rows_captured ?? '—'}</span></div>
         <div class="crash-field"><label>Silence before flag</label><span>${silence}</span></div>
-        <div class="crash-field"><label>Last program</label><span>${e.prog_name || '—'} step ${e.prog_step ?? '—'}</span></div>
+        <div class="crash-field"><label>Last program</label><span>${escHtml(e.prog_name || '—')} step ${e.prog_step ?? '—'}</span></div>
         <div class="crash-field"><label>Last voltage</label><span>${e.last_volts != null ? e.last_volts.toFixed(2)+'V' : '—'}</span></div>
         <div class="crash-field"><label>Last current</label><span>${e.last_amps != null ? e.last_amps.toFixed(3)+'A' : '—'}</span></div>
         <div class="crash-field"><label>Last RPM</label><span>${e.last_rpm ?? '—'}</span></div>
         <div class="crash-field"><label>Last KV</label><span>${e.last_kv ?? '—'}</span></div>
         <div class="crash-field"><label>Last temp</label><span>${e.last_temp != null ? e.last_temp+'°C' : '—'}</span></div>
-        <div class="crash-field"><label>Motor</label><span>${e.motor_identifier || e.motor_id || '—'}</span></div>
+        <div class="crash-field"><label>Motor</label><span>${escHtml(e.motor_identifier || e.motor_id || '—')}</span></div>
       </div>
 
       <div class="crash-section-label">SESSION HISTORY</div>
       ${sessionsHtml}
-      ${e.notes ? `<div class="crash-notes">${e.notes}</div>` : ''}
+      ${e.notes ? `<div class="crash-notes">${escHtml(e.notes)}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -5343,6 +5349,34 @@ async function closeApp() {
   }, 800);
 }
 
+// ── SERVER HEALTH ──
+let serverOnline = null;
+async function checkServerHealth() {
+  const res = await apiGet('/api/ping');
+  const ok = !!(res && res.ok);
+  if (ok === serverOnline) return;
+  const wasKnown = serverOnline !== null;
+  serverOnline = ok;
+  const dot = document.getElementById('serverDot');
+  if (dot) dot.className = 'status-dot' + (ok ? ' connected' : '');
+  if (!ok) showToast('Server offline — sessions cannot be saved to database', true);
+  else if (wasKnown) showToast('Server back online');
+}
+
+// Warn before closing the tab mid-recording — unsaved rows would be lost
+window.addEventListener('beforeunload', (e) => {
+  if (recording) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// Best-effort close of the DB connection record when the tab goes away
+window.addEventListener('pagehide', () => {
+  if (connectionDbId) {
+    navigator.sendBeacon(API + '/api/connections/close',
+      new Blob([JSON.stringify({ connection_id: connectionDbId, end_reason: 'tab_closed' })],
+               { type: 'application/json' }));
+  }
+});
+
 window.addEventListener('load', () => {
   if (!('serial' in navigator)) {
     document.getElementById('noSerialWarning').style.display = 'block';
@@ -5351,7 +5385,8 @@ window.addEventListener('load', () => {
   loadLibrary();
   initMotorRegistry();
   loadRegisteredMotors();
-  // No keepalive ping needed — server runs until Close App is clicked
+  checkServerHealth();
+  setInterval(checkServerHealth, 5000);
   window.addEventListener('resize', () => {
     if (chartData.rpm.length) {
       drawChart('chartRpm',chartData.rpm,'#00e5ff',null,true);

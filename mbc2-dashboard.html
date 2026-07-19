@@ -2560,14 +2560,17 @@ function startRecording() {
       program_id: sessionProgramId,
       session_type: 'Breakin'
     }).then(data => {
-      if (data?.session_id) {
+      // Don't overwrite if autoSaveSession already created a session
+      // (possible if recording was stopped before this response arrived)
+      if (data?.session_id && !sessionDbId) {
         sessionDbId = data.session_id;
         console.log('[MBC2] DB session started:', sessionDbId);
       }
     });
+    showToast('Ready — start program on MBC2 to begin recording');
+  } else {
+    showToast('No motor selected — session will not be saved to database', true);
   }
-
-  showToast('Ready — start program on MBC2 to begin recording');
 }
 
 function stopRecording() {
@@ -2609,7 +2612,16 @@ async function autoSaveSession() {
     kv_efficiency: r.kv || 0
   }));
 
+  // No DB session and no motor — server can't store it (motor_id is required).
+  // Keep it in memory for CSV export and tell the user plainly.
+  if (!sessionDbId && !sessionMotorId) {
+    showToast('Not saved to DB — select a motor before recording. CSV export still available.', true);
+    renderSessionList();
+    return;
+  }
+
   const payload = {
+    session_id:   sessionDbId || null,   // attach rows to the session opened at record start
     motor_id:     sessionMotorId || null,
     session_type: sessionDbId ? 'Breakin' : 'Manual',
     notes:        name,

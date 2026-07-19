@@ -205,12 +205,33 @@ def create_session(motor_id: int, session_type: str, notes: str = None, ambient_
         return cursor.lastrowid
 
 
+def session_exists(session_id: int) -> bool:
+    """Check whether a session record exists."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM sessions WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return row is not None
+
+
+def update_session_notes(session_id: int, notes: str):
+    """Set the notes/name on an existing session."""
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE sessions SET notes = ? WHERE session_id = ?",
+            (notes, session_id)
+        )
+        conn.commit()
+
+
 def log_session_data(session_id: int, rows: list):
     """
     Bulk insert parsed MBC2 data rows into session_data.
     
     Each row dict should contain parsed MBC2 CSV fields.
+    The session_id binding is filled in here — rows don't need to carry it.
     """
+    rows = [{**r, 'session_id': session_id} for r in rows]
     with get_connection() as conn:
         conn.executemany("""
             INSERT INTO session_data 

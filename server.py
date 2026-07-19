@@ -225,6 +225,8 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
 
         # ── Save session to DB ────────────────────────────────
         # Payload: {
+        #   session_id (optional — attach rows to an existing session
+        #               instead of creating a new one),
         #   motor_id, session_type, notes,
         #   rows: [ {timestamp_ms, raw_line, mode, program_step,
         #            voltage_mv, current_ma, rpm, temp_c,
@@ -244,17 +246,25 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
                 session_type = body.get('session_type', 'Breakin')
                 rows         = body.get('rows', [])
                 notes        = body.get('notes')
+                session_id   = body.get('session_id')
 
-                if not motor_id:
-                    self._json({'error': 'motor_id is required'}, 400)
-                    return
+                # Attach to the session created at record start, if given.
+                # Fall back to creating one if the id is stale/unknown.
+                if session_id and not db.session_exists(session_id):
+                    session_id = None
 
-                # Create session record
-                session_id = db.create_session(
-                    motor_id=motor_id,
-                    session_type=session_type,
-                    notes=notes
-                )
+                if session_id:
+                    if notes:
+                        db.update_session_notes(session_id, notes)
+                else:
+                    if not motor_id:
+                        self._json({'error': 'motor_id is required'}, 400)
+                        return
+                    session_id = db.create_session(
+                        motor_id=motor_id,
+                        session_type=session_type,
+                        notes=notes
+                    )
 
                 # Store all data rows in session_data table
                 if rows:

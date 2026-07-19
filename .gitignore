@@ -3,7 +3,9 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# SQLite
+# SQLite — never commit databases (personal session data,
+# and imported club programs must stay private)
+*.db
 *.db-shm
 *.db-wal
 

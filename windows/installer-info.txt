@@ -1,0 +1,43 @@
+MBC2 DASHBOARD - PLEASE READ BEFORE INSTALLING
+===============================================
+
+YOUR MOTOR DATA IS SAFE
+-----------------------
+Your session database (break-in sessions, motor logs) is stored
+SEPARATELY from the app, in:
+
+    %LOCALAPPDATA%\MBC2Dashboard\
+
+This installer only replaces the app itself. It does not read,
+modify or delete your motor data - not on install, not on update,
+not on uninstall. Daily backups are kept automatically in:
+
+    %LOCALAPPDATA%\MBC2Dashboard\backups\  (last 14 days)
+
+REQUIREMENTS
+------------
+1. BROWSER: Chrome or Edge is required. MBC2 Dashboard uses the
+   Web Serial API, which only exists in Chrome-based browsers.
+   Firefox and Safari will NOT work.
+
+2. CH340 DRIVER: The MBC2 device uses a CH340 USB-to-serial chip.
+   You need the CH340 driver installed on this PC.
+
+   Download: https://www.wch-ic.com/downloads/CH341SER_EXE.html
+
+   ARM64 USERS (Surface Pro X, Copilot+ PCs): you need exactly
+   version 3.9.2024.9. Newer versions dropped ARM64 support.
+   Download the older version from mic-LABO / Kris if needed.
+
+SMARTSCREEN WARNING
+-------------------
+Windows may show a "Windows protected your PC" warning the first
+time you run MBC2Dashboard.exe (the app is not code-signed).
+
+To proceed: click "More info" -> "Run anyway".
+
+UPDATING FROM v3.x?
+-------------------
+Your existing mbc2.db is safe and will be auto-migrated on first
+launch. The app will show a one-time notice and leave the original
+file in place as a backup.

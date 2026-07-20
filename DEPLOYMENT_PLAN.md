@@ -1,6 +1,6 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 2 complete*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 3 complete (hardware tests pending)*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -216,12 +216,17 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
       db copied, `DATA-HAS-MOVED.txt` written, original untouched; shutdown →
       process exits code 0, port 8766 released.
 
-### Phase 3 — Packages
-- [ ] `windows\MBC2Dashboard.iss` + `BUILD INSTALLER (developer use only).bat`
-      → `dist\MBC2Dashboard-Setup-<ver>.exe` + portable/USB zip.
-- [ ] USB launcher bats + README.
-- [ ] `mac\` package + builder.
-- [ ] Installer info page and per-platform READMEs (Chrome + CH340 text).
+### Phase 3 — Packages ✓ COMPLETE
+- [x] `windows\MBC2Dashboard.iss` + `BUILD INSTALLER (developer use only).bat`
+      → `dist\installer\MBC2Dashboard-Setup-4.0.exe` (11.5 MB) built OK.
+- [x] USB launcher bats (`Start MBC2 (USB).bat`, `Start MBC2 (this PC).bat`)
+      + `windows\README.txt`
+      → `dist\MBC2Dashboard-WindowsPortable-4.0.zip` (9.4 MB) built OK.
+- [x] `mac\` package + `BUILD MAC PACKAGE (developer use only).bat`
+      → `dist\MBC2Dashboard-Mac-4.0.zip` (0.1 MB) built OK.
+- [x] Installer info page (`windows\installer-info.txt`) and per-platform
+      READMEs (`windows\README.txt`, `mac\README.txt`) with Chrome + CH340
+      + ARM64 driver pin + SmartScreen click-through notes.
 
 ### Phase 4 — Repo restructure & docs
 - [ ] `git mv` into `app/` / `windows/` / `mac/`; fix imports/paths.

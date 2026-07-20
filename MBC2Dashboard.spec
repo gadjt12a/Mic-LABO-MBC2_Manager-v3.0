@@ -1,17 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+webview_datas, webview_bins, webview_imports = collect_all('webview')
 
 a = Analysis(
-    ['app/server.py'],
-    pathex=[],
-    binaries=[],
+    ['app/app.py'],
+    pathex=['app'],
+    binaries=webview_bins,
     datas=[
         ('app/mbc2-dashboard.html', '.'),
         ('app/schema.sql', '.'),
         ('app/default_programs.json', '.'),
         ('app/VERSION', '.'),
         ('app/icon.ico', '.'),
+        *webview_datas,
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        'server',
+        'db_manager',
+        'motor_api',
+        *webview_imports,
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -21,9 +30,21 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+splash = Splash(
+    'app/splash.png',
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=None,
+    text_size=12,
+    minify_script=True,
+    always_on_top=True,
+)
+
 exe = EXE(
     pyz,
     a.scripts,
+    splash,
+    splash.binaries,
     a.binaries,
     a.datas,
     [],

@@ -596,8 +596,8 @@
 </head>
 <body>
 
-<div class="no-serial" id="noSerialWarning">
-  ⚠ Web Serial API not supported. Use <strong>Chrome</strong> or <strong>Edge</strong> (desktop).
+<div class="no-serial" id="noSerialWarning" style="display:none;">
+  ⚠ No COM ports found. Connect the MBC2 via USB and click Refresh.
 </div>
 
 <!-- HEADER -->
@@ -621,6 +621,8 @@
 
 <!-- CONTROL BAR -->
 <div class="control-bar">
+  <select id="portSelect" style="max-width:180px;" title="Select COM port"></select>
+  <button class="btn" id="btnRefreshPorts" onclick="refreshPorts()" title="Refresh port list">⟳</button>
   <button class="btn primary" id="btnConnect" onclick="connectSerial()">Connect MBC2</button>
   <button class="btn danger" id="btnDisconnect" onclick="disconnectSerial()" disabled>Disconnect</button>
   <div class="separator"></div>
@@ -1078,7 +1080,7 @@
 // ═══════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════
-let port = null, reader = null, recording = false;
+let serialConnected = false, eventSource = null, recording = false;
 let sessionData = [], allSessions = {}, rawCount = 0, sessionStart = 0;
 let activeProfileId = null, activeProgramId = null;
 let programLibrary = { version: '1.0', profiles: [] };
@@ -1152,97 +1154,117 @@ async function apiPost(path, data) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SERIAL
+// SERIAL — server-side pyserial + SSE stream
 // ═══════════════════════════════════════════════════════════════
+async function refreshPorts() {
+  const sel = document.getElementById('portSelect');
+  const warn = document.getElementById('noSerialWarning');
+  try {
+    const r = await fetch('/api/ports');
+    const { ports } = await r.json();
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!ports || ports.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = '— no ports found —';
+      sel.appendChild(opt);
+      if (warn) warn.style.display = '';
+    } else {
+      if (warn) warn.style.display = 'none';
+      for (const p of ports) {
+        const opt = document.createElement('option');
+        opt.value = p.device;
+        opt.textContent = p.description && p.description !== p.device
+          ? `${p.device} — ${p.description}` : p.device;
+        sel.appendChild(opt);
+      }
+      if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+    }
+  } catch(e) {
+    console.warn('[MBC2] refreshPorts error:', e);
+  }
+}
+
 async function connectSerial() {
-  if (!('serial' in navigator)) {
-    showToast('Web Serial not supported. Use Chrome/Edge.', true);
-    document.getElementById('noSerialWarning').style.display = 'block';
+  const sel = document.getElementById('portSelect');
+  const portName = sel ? sel.value : '';
+  if (!portName) {
+    showToast('Select a COM port first', true);
     return;
   }
+
+  // Close any existing connection
+  if (serialConnected) await disconnectSerial();
+
   try {
-    console.log('[MBC2] Connect attempt started');
-
-    // Clean up any existing port first
-    if (port) {
-      console.log('[MBC2] Cleaning up existing port...');
-      try { if (reader) { await reader.cancel(); reader = null; } } catch(e) { console.log('[MBC2] reader cancel:', e.message); }
-      try { await port.close(); } catch(e) { console.log('[MBC2] port close:', e.message); }
-      port = null;
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    console.log('[MBC2] Requesting port...');
-    port = await navigator.serial.requestPort();
-    console.log('[MBC2] Port selected:', port);
-    console.log('[MBC2] Port readable:', port.readable, 'writable:', port.writable);
-
-    // If port is already open, try to close and reopen
-    if (port.readable || port.writable) {
-      console.log('[MBC2] Port appears open, closing first...');
-      try { await port.close(); } catch(e) { console.log('[MBC2] pre-close error:', e.message); }
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    console.log('[MBC2] Opening port at 115200...');
-    await port.open({ baudRate: 115200 });
-    console.log('[MBC2] Port opened successfully');
-
-    setStatus('connected', 'Connected');
-    document.getElementById('btnConnect').disabled = true;
-    document.getElementById('btnDisconnect').disabled = false;
-    document.getElementById('btnRecord').disabled = false;
-    updateDeviceControlButtons(true);
-    showToast('MBC2 Connected');
-    requestWakeLock();
-
-    // Register connection in DB
-    connectionStartedAt = new Date();
-    connectionDbId = null;
-    apiGet('/api/connections/open').then(res => {
-      if (res?.connection_id) {
-        connectionDbId = res.connection_id;
-        console.log('[MBC2] Connection registered in DB:', connectionDbId);
-      }
+    const r = await fetch('/api/serial/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port: portName })
     });
-
-    // Start silence watchdog
-    startSilenceWatchdog();
-
-    startReadLoop();
-  } catch(e) {
-    console.error('[MBC2] Connection error:', e.name, e.message, e);
-    if (e.message && e.message.toLowerCase().includes('already open')) {
-      showToast('Port locked. Click Disconnect then try again.', true);
-      document.getElementById('btnDisconnect').disabled = false;
-    } else if (e.name === 'NotFoundError' || e.message.includes('No port selected')) {
-      // User cancelled picker — not an error
-      console.log('[MBC2] User cancelled port selection');
-    } else {
-      showToast('Connection failed: ' + e.message, true);
+    const result = await r.json();
+    if (!result.ok) {
+      showToast('Connection failed: ' + (result.error || 'unknown error'), true);
+      return;
     }
-    port = null;
+  } catch(e) {
+    showToast('Connection failed: ' + e.message, true);
+    return;
   }
+
+  // Open SSE stream
+  eventSource = new EventSource('/api/serial/stream');
+  eventSource.onmessage = (e) => {
+    const line = e.data.trim();
+    if (line) parseLine(line);
+  };
+  eventSource.addEventListener('disconnect', () => {
+    console.log('[MBC2] Device disconnected');
+    disconnectSerial();
+  });
+  eventSource.onerror = () => {
+    if (serialConnected) {
+      console.warn('[MBC2] SSE error — connection lost');
+      disconnectSerial();
+    }
+  };
+
+  serialConnected = true;
+  setStatus('connected', 'Connected');
+  document.getElementById('btnConnect').disabled = true;
+  document.getElementById('btnDisconnect').disabled = false;
+  document.getElementById('btnRecord').disabled = false;
+  updateDeviceControlButtons(true);
+  showToast('MBC2 Connected');
+  requestWakeLock();
+
+  connectionStartedAt = new Date();
+  connectionDbId = null;
+  apiGet('/api/connections/open').then(res => {
+    if (res?.connection_id) connectionDbId = res.connection_id;
+  });
+  startSilenceWatchdog();
 }
 
 async function disconnectSerial() {
   recording = false;
   stopSilenceWatchdog();
-  if (reader) { try { await reader.cancel(); } catch(e) {} reader = null; }
-  if (port)   { try { await port.close();   } catch(e) {} port = null; }
+
+  if (eventSource) { try { eventSource.close(); } catch(e) {} eventSource = null; }
+  serialConnected = false;
+
+  try { await fetch('/api/serial/disconnect', { method: 'POST' }); } catch(e) {}
+
   releaseWakeLock();
 
-  // Close connection in DB
   if (connectionDbId) {
-    apiPost('/api/connections/close', {
-      connection_id: connectionDbId,
-      end_reason: 'normal'
-    });
+    apiPost('/api/connections/close', { connection_id: connectionDbId, end_reason: 'normal' });
     connectionDbId = null;
   }
   connectionStartedAt = null;
   lastDataTimestamp = null;
 
+  updateDeviceControlButtons(false);
   setStatus('', 'Disconnected');
   document.getElementById('btnConnect').disabled = false;
   document.getElementById('btnDisconnect').disabled = true;
@@ -1255,47 +1277,26 @@ async function disconnectSerial() {
 // ═══════════════════════════════════════════════════════════════
 // SEND COMMAND TO DEVICE
 // ═══════════════════════════════════════════════════════════════
-let writer = null;
-
 async function sendCommand(cmd) {
-  if (!port || !port.writable) {
-    console.warn('[MBC2] Cannot send — port not writable');
+  if (!serialConnected) {
+    console.warn('[MBC2] Cannot send — not connected');
     showToast('Not connected', true);
     return false;
   }
-
   try {
-    if (!writer) {
-      writer = port.writable.getWriter();
-    }
-
-    // Commands are terminated with \n (per SERIAL_SPEC.md)
-    const data = new TextEncoder().encode(cmd + '\n');
-    await writer.write(data);
+    await fetch('/api/serial/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cmd })
+    });
     console.log('[MBC2] Sent:', cmd);
     return true;
-  } catch (e) {
+  } catch(e) {
     console.error('[MBC2] Send error:', e);
     showToast('Send failed: ' + e.message, true);
-    // Release writer on error so it can be re-acquired
-    if (writer) {
-      try { writer.releaseLock(); } catch(e2) {}
-      writer = null;
-    }
     return false;
   }
 }
-
-// Release writer when disconnecting
-const originalDisconnect = disconnectSerial;
-disconnectSerial = async function() {
-  if (writer) {
-    try { writer.releaseLock(); } catch(e) {}
-    writer = null;
-  }
-  updateDeviceControlButtons(false);
-  await originalDisconnect();
-};
 
 // ═══════════════════════════════════════════════════════════════
 // DEVICE CONTROL PANEL
@@ -1353,7 +1354,7 @@ function updateRunStateIndicator() {
 // START (MANU mode)
 async function deviceStart() {
   // Auto-start recording session if not already recording
-  if (!recording && port) {
+  if (!recording && serialConnected) {
     startRecording();
   }
   await sendCommand('START');
@@ -1370,7 +1371,7 @@ async function deviceStartProg() {
     return;
   }
   // Auto-start recording session if not already recording
-  if (!recording && port) {
+  if (!recording && serialConnected) {
     startRecording();
   }
   await sendCommand('START_PROG:' + progNo);
@@ -1447,7 +1448,7 @@ function debouncedSendVoltage(v) {
 }
 
 async function sendVoltage(v) {
-  if (!port) return;
+  if (!serialConnected) return;
   await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
 }
 
@@ -1493,53 +1494,6 @@ function updateConfirmedCurrentLimit(a) {
   }
 }
 
-async function startReadLoop() {
-  console.log('[MBC2] startReadLoop called');
-  console.log('[MBC2] port.readable:', port.readable);
-
-  // Wait briefly for readable stream to become available
-  let attempts = 0;
-  while (!port.readable && attempts < 10) {
-    await new Promise(r => setTimeout(r, 100));
-    attempts++;
-    console.log('[MBC2] Waiting for readable... attempt', attempts, port.readable);
-  }
-
-  if (!port.readable) {
-    console.error('[MBC2] port.readable still null after waiting — using direct reader');
-    showToast('Stream error — trying alternative read method', true);
-    // Try alternative: read directly without pipeTo
-    try {
-      reader = port.readable.getReader();
-    } catch(e) {
-      console.error('[MBC2] Cannot get reader:', e);
-      showToast('Cannot read port: ' + e.message, true);
-      return;
-    }
-  }
-
-  try {
-    const decoder = new TextDecoderStream();
-    port.readable.pipeTo(decoder.writable);
-    reader = decoder.readable.getReader();
-    console.log('[MBC2] Reader created, starting loop');
-    let buffer = '';
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) { console.log('[MBC2] Stream done'); break; }
-      buffer += value;
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed) parseLine(trimmed);
-      }
-    }
-  } catch(e) {
-    console.error('[MBC2] Read loop error:', e.name, e.message);
-    if (port) showToast('Connection lost: ' + e.message, true);
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // PARSE — Line router
@@ -2341,10 +2295,10 @@ function parseCSVTelemetry(line) {
       if (window._manuFrames >= 5) {
         window._manuFrames = 0;
         recording = false;
-        document.getElementById('btnRecord').disabled = !port;
+        document.getElementById('btnRecord').disabled = !serialConnected;
         document.getElementById('btnStop').disabled = true;
         document.getElementById('runIndicator').style.display = 'none';
-        setStatus(port ? 'connected' : '', port ? 'Connected' : 'Disconnected');
+        setStatus(serialConnected ? 'connected' : '', serialConnected ? 'Connected' : 'Disconnected');
         document.getElementById('btnSave').disabled = false;
         showToast('Program complete — session auto-saved (' + sessionData.length + ' rows)');
         autoSaveSession();
@@ -2630,7 +2584,7 @@ function addLogRow(row, stepChange) {
 // RECORDING
 // ═══════════════════════════════════════════════════════════════
 function startRecording() {
-  if (!port) { showToast('Connect MBC2 first', true); return; }
+  if (!serialConnected) { showToast('Connect MBC2 first', true); return; }
 
   // Benchmark mode
   if (isBenchmarkSelected()) { startBenchmarkSession(); return; }
@@ -2670,10 +2624,10 @@ function startRecording() {
 
 function stopRecording() {
   recording = false;
-  document.getElementById('btnRecord').disabled = !port;
+  document.getElementById('btnRecord').disabled = !serialConnected;
   document.getElementById('btnStop').disabled = true;
   document.getElementById('runIndicator').style.display = 'none';
-  setStatus(port ? 'connected' : '', port ? 'Connected' : 'Disconnected');
+  setStatus(serialConnected ? 'connected' : '', serialConnected ? 'Connected' : 'Disconnected');
   if (sessionData.length > 0) {
     document.getElementById('btnSave').disabled = false;
     showToast('Session stopped — ' + sessionData.length + ' rows');
@@ -5060,6 +5014,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (benchRow) benchRow.style.display = isBenchmarkSelected() ? 'flex' : 'none';
   });
 
+  // Populate port list on startup
+  refreshPorts();
+
   // Load version from server and show one-time migration notice
   fetch('/api/info')
     .then(r => r.json())
@@ -5080,7 +5037,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let benchmarkWaiting = false; // true = waiting for program to start on device
 
 function startBenchmarkSession() {
-  if (!port) { showToast('Connect MBC2 first', true); return; }
+  if (!serialConnected) { showToast('Connect MBC2 first', true); return; }
   benchmarkData = [];
   benchmarkStart = 0; // will be set when program detected
   benchmarkMode = true;
@@ -5247,7 +5204,7 @@ async function requestWakeLock() {
       console.log('[MBC2] Wake Lock released');
       wakeLock = null;
       // Only re-acquire if still connected AND page is visible
-      if (port && document.visibilityState === 'visible') {
+      if (serialConnected && document.visibilityState === 'visible') {
         setTimeout(requestWakeLock, 1000);
       }
     });
@@ -5266,7 +5223,7 @@ function releaseWakeLock() {
 
 // Re-acquire wake lock when tab becomes visible again
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && port && !wakeLock) {
+  if (document.visibilityState === 'visible' && serialConnected && !wakeLock) {
     setTimeout(requestWakeLock, 500);
   }
 });
@@ -5286,7 +5243,7 @@ function stopSilenceWatchdog() {
 }
 
 function checkSilence() {
-  if (!port || !lastDataTimestamp) return;
+  if (!serialConnected || !lastDataTimestamp) return;
   // Only flag silence while a session is recording
   if (!recording && sessionData.length === 0) return;
 
@@ -5502,7 +5459,7 @@ async function closeApp() {
     if (!(await appConfirm('Session is recording. Stop recording and close?', { danger: true, okLabel: 'Stop & Close' }))) return;
     stopRecording();
   }
-  if (port) {
+  if (serialConnected) {
     await disconnectSerial();
   }
   releaseWakeLock();

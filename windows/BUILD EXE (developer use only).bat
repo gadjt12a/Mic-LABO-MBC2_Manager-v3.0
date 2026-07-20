@@ -1,17 +1,16 @@
 @echo off
 title MBC2 Dashboard - Build EXE
 REM ================================================================
-REM  Builds dist\MBC2Dashboard.exe — single-file server app
-REM  (no native window; opens Chrome/Edge after binding port 8766)
-REM  bundles: server.py, mbc2-dashboard.html, schema.sql,
-REM           default_programs.json, VERSION, icon.ico
+REM  Builds dist\MBC2Dashboard.exe — pywebview native window app
+REM  bundles: app.py, server.py, mbc2-dashboard.html, schema.sql,
+REM           default_programs.json, VERSION, icon.ico, splash.png
 REM
 REM  IMPORTANT: run this script with an x64 Python on PATH.
 REM  This machine is ARM64; an ARM64 build won't run on x64 PCs.
 REM  See BUILD.md for the recommended interpreter path.
 REM
 REM  One-time setup:
-REM    python -m pip install pyinstaller
+REM    python -m pip install pyinstaller pyserial pywebview
 REM ================================================================
 setlocal
 cd /d "%~dp0.."

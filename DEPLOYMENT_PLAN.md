@@ -24,15 +24,17 @@ machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
 
 ## Non-goals (explicit)
 
-- **No native desktop window.** WebView2 does not support the Web Serial API,
-  which this app requires. *(Confirmed — verdict recorded in Phase 2.)*
-  The exe runs the server and opens the user's Chrome/Edge — same as today.
 - **No driver installation.** The CH340 driver cannot and should not be
   silently installed by our packages. Documentation + a download link (and
   optionally the driver installer dropped onto prepared USB sticks) is the
   approach. The ARM64 driver pin (v3.9.2024.9) stays documentation-only.
 - **No code signing** for now (cost). SmartScreen click-through is documented
   instead, same as TRM.
+
+> **Architecture update (pywebview):** The original "no native window" verdict
+> was because WebView2 lacks Web Serial API support. This is resolved: serial
+> has moved to Python (pyserial), streamed to the frontend via SSE. The exe now
+> runs in a pywebview native window — no Chrome dependency at runtime.
 
 ---
 
@@ -203,8 +205,8 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
 - [x] Server log to file when frozen (`sys.frozen`), console when from source.
 
 ### Phase 2 — Single executable
-- [x] Confirm WebView2 Web Serial verdict: **unsupported — browser mode is
-      final.** Documented as a non-goal; `console=False` spec confirmed.
+- [x] Confirm WebView2 Web Serial verdict: **unsupported.** Resolution: serial
+      moved to Python (pyserial + SSE); app opens in pywebview native window.
 - [x] PyInstaller spec (`MBC2Dashboard.spec`) + `windows\BUILD EXE
       (developer use only).bat` (x64 Python; see `BUILD.md`).
 - [x] Browser-after-bind; already-running guard; foreign-port message box
@@ -227,6 +229,22 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
 - [x] Installer info page (`windows\installer-info.txt`) and per-platform
       READMEs (`windows\README.txt`, `mac\README.txt`) with Chrome + CH340
       + ARM64 driver pin + SmartScreen click-through notes.
+
+### Phase 4.5 — pywebview + server-side serial
+- [x] Serial moved to Python: `SerialManager` class in `app/server.py`;
+      `/api/ports`, `/api/serial/connect`, `/api/serial/disconnect`,
+      `/api/serial/send`, `/api/serial/stream` (SSE) routes added.
+- [x] Frontend rewritten: Web Serial API removed; port selector dropdown +
+      ⟳ refresh button; `connectSerial` / `disconnectSerial` / `sendCommand`
+      use HTTP + SSE; all stale `port` variable references updated.
+- [x] `app/app.py` created: pywebview entry point; starts server in background
+      thread, polls `/api/ping`, opens native window; window-close → `os._exit`.
+- [x] `app/splash.png` generated: 400×400 px from `app/icon/icon.png`.
+- [x] `MBC2Dashboard.spec` updated: entry point → `app/app.py`; `collect_all('webview')`
+      binaries/datas/hiddenimports; `Splash('app/splash.png', ...)` block.
+- [x] Build test passed (2026-07-20, Python 3.14.4 AMD64, PyInstaller 6.21.0,
+      pywebview 6.2.1, pyserial 3.5): native window opens; `/api/ping` → 200;
+      `/api/shutdown` → clean exit (code 0) within ~4s.
 
 ### Phase 4 — Repo restructure & docs ✓ COMPLETE
 - [x] `git mv` into `app/`; `windows/` and `mac/` already in place; paths

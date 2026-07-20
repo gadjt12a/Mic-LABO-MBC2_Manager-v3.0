@@ -13,6 +13,7 @@ import http.server
 import json
 import logging
 import os
+import queue
 import shutil
 import socketserver
 import sqlite3
@@ -21,6 +22,13 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+
+try:
+    import serial
+    import serial.tools.list_ports as _list_ports
+    _PYSERIAL = True
+except ImportError:
+    _PYSERIAL = False
 
 PORT = 8766
 
@@ -187,6 +195,109 @@ def _prepare():
     except Exception as e:
         logging.warning(f'[MBC2] Seed warning: {e}')
 
+# ── Serial manager ─────────────────────────────────────────────────────────────
+class SerialManager:
+    """Owns the serial port and broadcasts incoming lines to SSE subscribers."""
+
+    def __init__(self):
+        self._port   = None
+        self._lock   = threading.Lock()
+        self._subs   = []   # list of queue.Queue, one per SSE client
+        self._thread = None
+
+    def list_ports(self):
+        if not _PYSERIAL:
+            return []
+        return [
+            {'device': p.device, 'description': p.description or p.device}
+            for p in _list_ports.comports()
+        ]
+
+    def connect(self, port_name: str) -> dict:
+        if not _PYSERIAL:
+            return {'ok': False, 'error': 'pyserial not installed'}
+        with self._lock:
+            if self._port and self._port.is_open:
+                try:
+                    self._port.close()
+                except Exception:
+                    pass
+            try:
+                self._port = serial.Serial(port_name, 115200, timeout=0.1)
+            except Exception as e:
+                self._port = None
+                return {'ok': False, 'error': str(e)}
+        self._thread = threading.Thread(target=self._read_loop, daemon=True)
+        self._thread.start()
+        return {'ok': True, 'port': port_name}
+
+    def disconnect(self):
+        with self._lock:
+            if self._port:
+                try:
+                    self._port.close()
+                except Exception:
+                    pass
+                self._port = None
+
+    def send(self, cmd: str) -> bool:
+        with self._lock:
+            if not self._port or not self._port.is_open:
+                return False
+            try:
+                self._port.write((cmd + '\n').encode('utf-8'))
+                return True
+            except Exception:
+                return False
+
+    def subscribe(self) -> queue.Queue:
+        q = queue.Queue(maxsize=500)
+        with self._lock:
+            self._subs.append(q)
+        return q
+
+    def unsubscribe(self, q: queue.Queue):
+        with self._lock:
+            try:
+                self._subs.remove(q)
+            except ValueError:
+                pass
+
+    def _broadcast(self, msg: str):
+        with self._lock:
+            dead = []
+            for q in self._subs:
+                try:
+                    q.put_nowait(msg)
+                except queue.Full:
+                    dead.append(q)
+            for q in dead:
+                self._subs.remove(q)
+
+    def _read_loop(self):
+        buf = b''
+        while True:
+            with self._lock:
+                if not self._port or not self._port.is_open:
+                    break
+                p = self._port
+            try:
+                chunk = p.read(p.in_waiting or 1)
+                if chunk:
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        text = line.decode('utf-8', errors='replace').rstrip('\r')
+                        if text:
+                            self._broadcast(f'data: {text}\n\n')
+            except Exception:
+                break
+        self._broadcast('event: disconnect\ndata: \n\n')
+
+
+_serial = SerialManager()
+
+
 # ── Request handler ────────────────────────────────────────────────────────────
 class MBC2Handler(http.server.BaseHTTPRequestHandler):
 
@@ -297,11 +408,43 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
                     self._json({'error': str(e)}, 500)
             return
 
+        # ── Serial: list available COM ports ─────────────────────────────────
+        if path == '/api/ports':
+            self._json({'ports': _serial.list_ports()})
+            return
+
+        # ── Serial: SSE stream of incoming lines ──────────────────────────────
+        if path == '/api/serial/stream':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Connection', 'keep-alive')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            q = _serial.subscribe()
+            try:
+                while True:
+                    try:
+                        msg = q.get(timeout=15)
+                        self.wfile.write(msg.encode('utf-8'))
+                        self.wfile.flush()
+                    except queue.Empty:
+                        self.wfile.write(b': keep-alive\n\n')
+                        self.wfile.flush()
+            except Exception:
+                pass
+            finally:
+                _serial.unsubscribe(q)
+            return
+
         # ── Shutdown ─────────────────────────────────────────────────────────
         if path == '/api/shutdown':
             self._json({'ok': True, 'message': 'Server shutting down'})
-            logging.info('[MBC2] Shutdown requested from browser.')
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            logging.info('[MBC2] Shutdown requested.')
+            def _do_exit():
+                time.sleep(0.2)
+                os._exit(0)
+            threading.Thread(target=_do_exit, daemon=True).start()
             return
 
         # ── Firmware proxy ───────────────────────────────────────────────────
@@ -351,6 +494,34 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
         # ── Motor / Profile API ──────────────────────────────────────────────
         if path.startswith('/api/motors') or path.startswith('/api/profiles'):
             motor_api.handle_motor_api(self)
+            return
+
+        # ── Serial: connect to a COM port ────────────────────────────────────
+        if path == '/api/serial/connect':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body   = json.loads(self.rfile.read(length))
+                result = _serial.connect(body.get('port', ''))
+                self._json(result)
+            except Exception as e:
+                self._json({'ok': False, 'error': str(e)}, 500)
+            return
+
+        # ── Serial: disconnect ────────────────────────────────────────────────
+        if path == '/api/serial/disconnect':
+            _serial.disconnect()
+            self._json({'ok': True})
+            return
+
+        # ── Serial: send command to device ────────────────────────────────────
+        if path == '/api/serial/send':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body   = json.loads(self.rfile.read(length))
+                ok     = _serial.send(body.get('cmd', ''))
+                self._json({'ok': ok})
+            except Exception as e:
+                self._json({'ok': False, 'error': str(e)}, 500)
             return
 
         # ── Connection close ─────────────────────────────────────────────────

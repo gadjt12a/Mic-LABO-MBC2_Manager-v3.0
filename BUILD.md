@@ -13,9 +13,9 @@ Confirm the active interpreter before building:
     python -c "import platform; print(platform.machine())"
     # must print: AMD64
 
-Install the build dependency into that interpreter:
+Install the build dependencies into that interpreter:
 
-    python -m pip install pyinstaller
+    python -m pip install pyinstaller pyserial pywebview
 
 ---
 
@@ -94,3 +94,4 @@ Record interpreter and PyInstaller version each time a release build is cut.
 | Version | Date | Python x64 path | PyInstaller |
 |---|---|---|---|
 | 4.0 | 2026-07-20 | `C:\Users\Kris.Pawson\AppData\Local\Python\pythoncore-3.14-64\python.exe` (3.14.4 AMD64) | 6.21.0 |
+| 4.0 (pywebview) | 2026-07-20 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |

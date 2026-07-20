@@ -1,6 +1,6 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` (proposed) · Status: DRAFT — not started*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 1 complete*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -192,17 +192,17 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
 
 ## Work phases
 
-### Phase 1 — Data home, backups, version (server-side; no packaging yet)
-- [ ] Data-dir resolution: `MBC2_DATA_DIR` → platform default; create on
+### Phase 1 — Data home, backups, version (server-side; no packaging yet) ✓ COMPLETE
+- [x] Data-dir resolution: `MBC2_DATA_DIR` → platform default; create on
       first run.
-- [ ] `db_manager.DB_PATH` derives from data dir; `schema.sql` and
+- [x] `db_manager.DB_PATH` derives from data dir; `schema.sql` and
       `default_programs.json` located relative to the app bundle (PyInstaller
       `_MEIPASS`-aware helper).
-- [ ] Legacy `mbc2.db` copy-never-move migration + `DATA-HAS-MOVED.txt` +
+- [x] Legacy `mbc2.db` copy-never-move migration + `DATA-HAS-MOVED.txt` +
       one-time in-app notice (via `/api/info`).
-- [ ] Startup rolling backup (sqlite backup API, keep 14, daily).
-- [ ] `VERSION` file, `/api/info`, footer reads version dynamically.
-- [ ] Server log to file when frozen (`sys.frozen`), console when from source.
+- [x] Startup rolling backup (sqlite backup API, keep 14, daily).
+- [x] `VERSION` file, `/api/info`, footer reads version dynamically.
+- [x] Server log to file when frozen (`sys.frozen`), console when from source.
 
 ### Phase 2 — Single executable
 - [ ] Confirm WebView2 Web Serial verdict (expected: unsupported → browser

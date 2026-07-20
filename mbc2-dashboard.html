@@ -998,7 +998,7 @@
 
 <!-- FOOTER -->
 <div class="footer">
-  <span>MBC2 Dashboard v3.4.2 — mic-LABO Motor Boot Camp 2</span>
+  <span id="footerVersion">MBC2 Dashboard — mic-LABO Motor Boot Camp 2</span>
   <span>Frames: <span class="raw-count" id="rawCount">0</span> &nbsp;|&nbsp; Session: <span class="raw-count" id="sessionCount">0</span> rows</span>
 </div>
 
@@ -5059,6 +5059,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const benchRow = document.querySelector('#benchmarkType')?.closest('div');
     if (benchRow) benchRow.style.display = isBenchmarkSelected() ? 'flex' : 'none';
   });
+
+  // Load version from server and show one-time migration notice
+  fetch('/api/info')
+    .then(r => r.json())
+    .then(info => {
+      const el = document.getElementById('footerVersion');
+      if (el && info.version) {
+        el.textContent = 'MBC2 Dashboard v' + info.version + ' — mic-LABO Motor Boot Camp 2';
+      }
+      if (info.migrated) {
+        showToast('Motor data moved to ' + info.dataDir + ' — see DATA-HAS-MOVED.txt');
+      }
+    })
+    .catch(() => {}); // server may not be v4 yet — fail silently
 });
 
 // startRecording benchmark override consolidated below

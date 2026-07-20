@@ -21,6 +21,19 @@ if getattr(sys, 'frozen', False):
 import server as srv
 import webview
 
+try:
+    import pyi_splash as _splash
+except ImportError:
+    _splash = None
+
+
+def _dismiss_splash():
+    if _splash:
+        try:
+            _splash.close()
+        except Exception:
+            pass
+
 
 def _start_server():
     srv._prepare()
@@ -50,6 +63,7 @@ def main():
             f'http://127.0.0.1:{srv.PORT}',
             width=1400, height=900, min_size=(900, 600),
         )
+        window.events.loaded += _dismiss_splash
         window.events.closed += lambda: os._exit(0)
         webview.start()
         return
@@ -71,6 +85,7 @@ def main():
         f'http://127.0.0.1:{srv.PORT}',
         width=1400, height=900, min_size=(900, 600),
     )
+    window.events.loaded += _dismiss_splash
     window.events.closed += lambda: os._exit(0)
     webview.start()
 

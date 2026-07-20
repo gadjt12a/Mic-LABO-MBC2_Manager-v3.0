@@ -1,6 +1,6 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 2 in progress (smoke test pending)*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 2 complete*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -211,8 +211,10 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
       (completed in Phase 1).
 - [x] Icon artwork: `icon.ico` generated (16/32/48/64/128/256 px) from
       `icon/icon.png`. Moves to `app/icon.ico` in Phase 4 restructure.
-- [ ] Smoke test: fresh exe, legacy migration beside exe, Stop Server exits
-      the process cleanly. *(needs x64 Python + PyInstaller — Kris runs)*
+- [x] Smoke test passed (2026-07-20, Python 3.14.4 x64, PyInstaller 6.21.0):
+      fresh launch → `/api/info` returns `{version:4.0}`; legacy migration →
+      db copied, `DATA-HAS-MOVED.txt` written, original untouched; shutdown →
+      process exits code 0, port 8766 released.
 
 ### Phase 3 — Packages
 - [ ] `windows\MBC2Dashboard.iss` + `BUILD INSTALLER (developer use only).bat`

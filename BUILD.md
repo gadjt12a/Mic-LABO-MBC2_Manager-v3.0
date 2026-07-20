@@ -30,7 +30,7 @@ Record interpreter and PyInstaller version each time a release build is cut.
 
 | Version | Date | Python x64 path | PyInstaller |
 |---|---|---|---|
-| *(none yet)* | | | |
+| 4.0 | 2026-07-20 | `C:\Users\Kris.Pawson\AppData\Local\Python\pythoncore-3.14-64\python.exe` (3.14.4 AMD64) | 6.21.0 |
 
 ---
 

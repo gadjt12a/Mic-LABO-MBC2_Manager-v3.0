@@ -14,7 +14,7 @@ REM    Inno Setup 6  (winget install JRSoftware.InnoSetup)
 REM ================================================================
 setlocal
 cd /d "%~dp0.."
-set /p APPVERSION=<VERSION
+set /p APPVERSION=<app\VERSION
 echo.
 echo  [1/3] Building MBC2Dashboard.exe v%APPVERSION% ...
 echo.

@@ -2,7 +2,7 @@
 ; Build with: BUILD INSTALLER (developer use only).bat
 ; Paths are relative to this file (windows\); version from VERSION.
 
-#define VerFile FileOpen(SourcePath + "\..\VERSION")
+#define VerFile FileOpen(SourcePath + "\..\app\VERSION")
 #define AppVer Trim(FileRead(VerFile))
 #expr FileClose(VerFile)
 
@@ -18,7 +18,7 @@ DisableDirPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist\installer
 OutputBaseFilename=MBC2Dashboard-Setup-{#AppVer}
-SetupIconFile=..\icon.ico
+SetupIconFile=..\app\icon.ico
 UninstallDisplayIcon={app}\MBC2Dashboard.exe
 Compression=lzma2
 SolidCompression=yes

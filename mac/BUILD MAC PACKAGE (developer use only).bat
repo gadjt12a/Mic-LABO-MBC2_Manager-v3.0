@@ -11,7 +11,7 @@ REM  Version comes from VERSION.
 REM ================================================================
 setlocal
 cd /d "%~dp0.."
-set /p APPVERSION=<VERSION
+set /p APPVERSION=<app\VERSION
 echo.
 echo  Building Mac package v%APPVERSION% ...
 
@@ -21,13 +21,13 @@ mkdir "%STAGE%\app"
 
 copy /y "mac\Start MBC2 Dashboard.command"  "%STAGE%\"      >nul
 copy /y "mac\README.txt"                    "%STAGE%\"      >nul
-copy /y "server.py"                         "%STAGE%\app\"  >nul
-copy /y "db_manager.py"                     "%STAGE%\app\"  >nul
-copy /y "motor_api.py"                      "%STAGE%\app\"  >nul
-copy /y "mbc2-dashboard.html"               "%STAGE%\app\"  >nul
-copy /y "schema.sql"                        "%STAGE%\app\"  >nul
-copy /y "default_programs.json"             "%STAGE%\app\"  >nul
-copy /y "VERSION"                           "%STAGE%\app\"  >nul
+copy /y "app\server.py"                     "%STAGE%\app\"  >nul
+copy /y "app\db_manager.py"                 "%STAGE%\app\"  >nul
+copy /y "app\motor_api.py"                  "%STAGE%\app\"  >nul
+copy /y "app\mbc2-dashboard.html"           "%STAGE%\app\"  >nul
+copy /y "app\schema.sql"                    "%STAGE%\app\"  >nul
+copy /y "app\default_programs.json"         "%STAGE%\app\"  >nul
+copy /y "app\VERSION"                       "%STAGE%\app\"  >nul
 
 powershell -Command "Compress-Archive -Force -Path 'dist\mac-stage\MBC2Dashboard' -DestinationPath 'dist\MBC2Dashboard-Mac-%APPVERSION%.zip'"
 rmdir /s /q "dist\mac-stage"

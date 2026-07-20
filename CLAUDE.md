@@ -13,20 +13,28 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 | Layer | Technology |
 |---|---|
 | Backend | Python stdlib `http.server` (no external dependencies) |
-| Frontend | Vanilla JS, single HTML file (`mbc2-dashboard.html`) |
-| Database | SQLite (`mbc2.db`) |
+| Frontend | Vanilla JS, single HTML file (`app/mbc2-dashboard.html`) |
+| Database | SQLite (`mbc2.db` in `%LOCALAPPDATA%\MBC2Dashboard\` for packaged; beside `app/` for dev) |
 | Serial | Web Serial API (Chrome only, 115200 baud) |
 | Host | Windows (Microsoft Surface X, ARM64) |
 
 **Working directory:** `C:\kris\Projects\Mic-LABO-MBC2_Manager-v3.0\`
 
+**Repo layout (v4):**
+- `app/` — all source files: `server.py`, `db_manager.py`, `motor_api.py`, `mbc2-dashboard.html`, `schema.sql`, `default_programs.json`, `VERSION`, `icon.ico`
+- `windows/` — Windows build scripts, Inno Setup script, USB launcher bats, READMEs
+- `mac/` — Mac launcher, Mac package build script, Mac README
+- `docs/` — technical reference docs (unchanged)
+
 ---
 
-## Current version: v3.4.2
+## Current version: v4.0 (branch: `v4-packaging`)
 
-Packaging for v4 (Windows installer / USB standalone / Mac zip) is planned —
-see [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md). Note: a native desktop window
-(pywebview/WebView2) is **not** possible — WebView2 lacks Web Serial support.
+v4 packaging is complete on the `v4-packaging` branch (pending hardware test
+matrix and merge to `main`). See [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md).
+
+**No native desktop window — ever.** WebView2 does not support the Web Serial
+API. The packaged exe runs the server and opens Chrome/Edge. This is final.
 
 See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 
@@ -55,7 +63,8 @@ Key architectural facts:
 ### General
 
 - **Incremental changes only.** Do not rewrite large sections of code wholesale. Make targeted, minimal changes.
-- **The frontend is a single file** (`mbc2-dashboard.html`). Do not split it into multiple files.
+- **The frontend is a single file** (`app/mbc2-dashboard.html`). Do not split it into multiple files.
+- **No native desktop window — ever.** WebView2 does not support the Web Serial API. The exe opens Chrome/Edge. Do not attempt pywebview or any embedded browser.
 - **Web Serial API is intentionally Chrome-only.** Do not attempt to add Node.js serial or other browser compatibility.
 - **Serial baud rate is 115200.** Do not change this.
 - **The CH340 driver required is v3.9.2024.9** (ARM64). Newer versions dropped ARM64 support. Do not reference or suggest driver upgrades.

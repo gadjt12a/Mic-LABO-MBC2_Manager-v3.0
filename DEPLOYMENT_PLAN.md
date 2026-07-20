@@ -1,6 +1,6 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 3 complete (hardware tests pending)*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 4 complete — hardware test matrix pending*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -228,15 +228,17 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
       READMEs (`windows\README.txt`, `mac\README.txt`) with Chrome + CH340
       + ARM64 driver pin + SmartScreen click-through notes.
 
-### Phase 4 — Repo restructure & docs
-- [ ] `git mv` into `app/` / `windows/` / `mac/`; fix imports/paths.
-- [ ] Root README platform picker; absorb setup guides; delete root
-      launchers.
-- [ ] `BUILD.md` (clean-checkout build guide, incl. x64-Python note and
-      ASCII-bat gotcha).
-- [ ] `CLAUDE.md` + `docs/VERSION_HISTORY.md` updates.
-- [ ] `RELEASE_NOTES_v4.md` draft (SmartScreen screenshots, CH340/ARM64
-      instructions, zip→installer data note).
+### Phase 4 — Repo restructure & docs ✓ COMPLETE
+- [x] `git mv` into `app/`; `windows/` and `mac/` already in place; paths
+      fixed in spec, bats, iss.
+- [x] Root README rewritten as platform picker; old setup guides removed;
+      root launchers removed.
+- [x] `BUILD.md` expanded: clean-checkout guide, x64-Python note, ASCII-bat
+      gotcha, dist verification checklist.
+- [x] `CLAUDE.md` updated: v4.0, new repo layout, no-native-window hard rule.
+      `docs/VERSION_HISTORY.md` v4.0 entry added.
+- [x] `RELEASE_NOTES_v4.md` drafted: upgrade paths, SmartScreen note (TODO:
+      screenshot), CH340/ARM64 pin, compatibility policy.
 
 ### Phase 5 — Test matrix & release
 See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all

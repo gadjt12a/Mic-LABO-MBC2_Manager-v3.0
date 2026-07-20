@@ -17,12 +17,75 @@ Install the build dependency into that interpreter:
 
     python -m pip install pyinstaller
 
-## Building the exe
+---
 
-Run `windows\BUILD EXE (developer use only).bat` — it reads `VERSION`,
-calls `pyinstaller --clean MBC2Dashboard.spec`, and prints the output path.
+## Building from a clean checkout
 
-Output: `dist\MBC2Dashboard.exe`
+**Important:** always build from a clean git checkout — never from a working
+folder that has a live `mbc2.db`. The published packages must not contain any
+motor session data or club programs.
+
+```bat
+git clone <repo-url> mbc2-build
+cd mbc2-build
+git checkout v4.0      REM or the tag you are releasing
+```
+
+---
+
+## Build the Windows exe
+
+    windows\BUILD EXE (developer use only).bat
+
+Reads version from `app\VERSION`. Output: `dist\MBC2Dashboard.exe`
+
+## Build the Windows installer + USB zip (one step)
+
+    windows\BUILD INSTALLER (developer use only).bat
+
+Requires Inno Setup 6:
+
+    winget install JRSoftware.InnoSetup
+
+Output:
+- `dist\installer\MBC2Dashboard-Setup-<ver>.exe`
+- `dist\MBC2Dashboard-WindowsPortable-<ver>.zip`
+
+## Build the Mac package
+
+    mac\BUILD MAC PACKAGE (developer use only).bat
+
+Runs on Windows. Output: `dist\MBC2Dashboard-Mac-<ver>.zip`
+
+---
+
+## Bat file encoding note (ASCII-bat gotcha)
+
+Windows batch files **must be saved as ASCII** (or Windows-1252 without BOM).
+If a `.bat` is saved as UTF-8 with BOM, `cmd.exe` may misread the first line
+and produce `'@echo' is not recognized` or silent failures. The build bats in
+this repo contain only ASCII characters for this reason.
+
+---
+
+## Verify the dist/ output before releasing
+
+```
+dist\installer\MBC2Dashboard-Setup-<ver>.exe   should exist
+dist\MBC2Dashboard-WindowsPortable-<ver>.zip   should contain:
+    MBC2Dashboard\MBC2Dashboard.exe
+    MBC2Dashboard\Start MBC2 (USB).bat
+    MBC2Dashboard\Start MBC2 (this PC).bat
+    MBC2Dashboard\README.txt
+dist\MBC2Dashboard-Mac-<ver>.zip               should contain:
+    MBC2Dashboard\Start MBC2 Dashboard.command
+    MBC2Dashboard\README.txt
+    MBC2Dashboard\app\server.py  (and other app files)
+```
+
+**Verify no `.db` files are in the dist output** before publishing.
+
+---
 
 ## Release build record
 
@@ -31,8 +94,3 @@ Record interpreter and PyInstaller version each time a release build is cut.
 | Version | Date | Python x64 path | PyInstaller |
 |---|---|---|---|
 | 4.0 | 2026-07-20 | `C:\Users\Kris.Pawson\AppData\Local\Python\pythoncore-3.14-64\python.exe` (3.14.4 AMD64) | 6.21.0 |
-
----
-
-*This file will be expanded in Phase 4 with the full clean-checkout guide,
-USB zip procedure, installer build steps, and Mac package steps.*

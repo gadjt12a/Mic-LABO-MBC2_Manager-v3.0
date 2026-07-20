@@ -15,7 +15,7 @@ REM    python -m pip install pyinstaller
 REM ================================================================
 setlocal
 cd /d "%~dp0.."
-set /p APPVERSION=<VERSION
+set /p APPVERSION=<app\VERSION
 echo.
 echo  Building MBC2 Dashboard v%APPVERSION% ...
 echo.

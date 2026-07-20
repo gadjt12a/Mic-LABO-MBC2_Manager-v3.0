@@ -1,6 +1,17 @@
 # MBC2 Dashboard — Version History
 
-## v3.4.2 (current)
+## v4.0 (current)
+
+- **Windows installer** — single-file `MBC2Dashboard.exe` (PyInstaller) + Inno Setup installer; per-user install, no admin rights required
+- **USB / portable zip** — exe + launcher bats; `Start MBC2 (USB).bat` stores data on the stick via `MBC2_DATA_DIR`
+- **Mac package** — source zip with launcher `.command` (UNTESTED disclaimer)
+- **Data safety** — motor database permanently separated from app install; installer can never touch `mbc2.db`
+- **Auto backups** — rolling daily backup to `%LOCALAPPDATA%\MBC2Dashboard\backups\` (14 kept)
+- **Repo restructure** — `app/`, `windows/`, `mac/` layout; root README is now a platform picker
+- **Version single-sourcing** — `app/VERSION` read at startup; footer fetched from `/api/info`
+- **Legacy migration** — v3.x `mbc2.db` beside the exe is auto-copied on first v4 launch
+
+## v3.4.2
 
 - **Phase 4: Program launch panel** — START PROGRAM section replaced with a named dropdown; programs synced via Settings → Program Sync appear by slot number and name; hint guides user to sync first
 

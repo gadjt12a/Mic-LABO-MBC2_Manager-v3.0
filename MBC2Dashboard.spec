@@ -1,15 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['server.py'],
+    ['app/server.py'],
     pathex=[],
     binaries=[],
     datas=[
-        ('mbc2-dashboard.html', '.'),
-        ('schema.sql', '.'),
-        ('default_programs.json', '.'),
-        ('VERSION', '.'),
-        ('icon.ico', '.'),
+        ('app/mbc2-dashboard.html', '.'),
+        ('app/schema.sql', '.'),
+        ('app/default_programs.json', '.'),
+        ('app/VERSION', '.'),
+        ('app/icon.ico', '.'),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -40,5 +40,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['icon.ico'],
+    icon=['app/icon.ico'],
 )

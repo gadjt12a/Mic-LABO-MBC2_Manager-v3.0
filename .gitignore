@@ -9,6 +9,10 @@ __pycache__/
 *.db-shm
 *.db-wal
 
+# PyInstaller build output
+build/
+dist/
+
 # IDE
 .vscode/
 .idea/

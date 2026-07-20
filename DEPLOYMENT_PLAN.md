@@ -1,6 +1,6 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 1 complete*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 2 in progress (smoke test pending)*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -24,11 +24,9 @@ machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
 
 ## Non-goals (explicit)
 
-- **No native desktop window.** TRM v10's pywebview/WebView2 window cannot be
-  used here: WebView2 does not support the Web Serial API, which this app
-  requires. The exe runs the server and opens the user's Chrome/Edge — same
-  as today. *(Confirm with a 5-minute WebView2 test before Phase 2, then
-  record the result here.)*
+- **No native desktop window.** WebView2 does not support the Web Serial API,
+  which this app requires. *(Confirmed — verdict recorded in Phase 2.)*
+  The exe runs the server and opens the user's Chrome/Edge — same as today.
 - **No driver installation.** The CH340 driver cannot and should not be
   silently installed by our packages. Documentation + a download link (and
   optionally the driver installer dropped onto prepared USB sticks) is the
@@ -205,14 +203,16 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
 - [x] Server log to file when frozen (`sys.frozen`), console when from source.
 
 ### Phase 2 — Single executable
-- [ ] Confirm WebView2 Web Serial verdict (expected: unsupported → browser
-      mode final).
-- [ ] PyInstaller spec + `windows\BUILD EXE (developer use only).bat`
-      (x64 Python).
-- [ ] Browser-after-bind; already-running guard; foreign-port message box.
-- [ ] Icon artwork → `app/icon.ico`.
+- [x] Confirm WebView2 Web Serial verdict: **unsupported — browser mode is
+      final.** Documented as a non-goal; `console=False` spec confirmed.
+- [x] PyInstaller spec (`MBC2Dashboard.spec`) + `windows\BUILD EXE
+      (developer use only).bat` (x64 Python; see `BUILD.md`).
+- [x] Browser-after-bind; already-running guard; foreign-port message box
+      (completed in Phase 1).
+- [x] Icon artwork: `icon.ico` generated (16/32/48/64/128/256 px) from
+      `icon/icon.png`. Moves to `app/icon.ico` in Phase 4 restructure.
 - [ ] Smoke test: fresh exe, legacy migration beside exe, Stop Server exits
-      the process cleanly.
+      the process cleanly. *(needs x64 Python + PyInstaller — Kris runs)*
 
 ### Phase 3 — Packages
 - [ ] `windows\MBC2Dashboard.iss` + `BUILD INSTALLER (developer use only).bat`

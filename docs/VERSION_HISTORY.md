@@ -1,6 +1,10 @@
 # MBC2 Dashboard — Version History
 
-## v3.4.1 (current)
+## v3.4.2 (current)
+
+- **Phase 4: Program launch panel** — START PROGRAM section replaced with a named dropdown; programs synced via Settings → Program Sync appear by slot number and name; hint guides user to sync first
+
+## v3.4.1
 
 - **Session save fix** — telemetry rows now persist; duplicate session records eliminated; CSV export no longer empty
 - **Server hardening** — localhost-only bind, threaded request handling

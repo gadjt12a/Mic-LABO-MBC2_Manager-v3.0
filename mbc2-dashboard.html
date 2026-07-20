@@ -923,12 +923,17 @@
 
       <!-- Program selector for START_PROG -->
       <div style="margin-top:6px;">
-        <div class="prog-detail-label">START PROGRAM #</div>
+        <div class="prog-detail-label">START PROGRAM</div>
         <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
-          <input type="number" id="startProgNo" min="1" max="50" value="1"
-                 style="width:50px;font-family:var(--mono);font-size:11px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">
+          <select id="startProgSelect"
+                  style="flex:1;font-family:var(--mono);font-size:10px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);">
+            <option value="">— no programs synced —</option>
+          </select>
           <button class="btn primary" id="btnStartProg" onclick="deviceStartProg()" disabled
                   style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
+        </div>
+        <div id="startProgHint" style="font-size:9px;color:var(--text3);margin-top:2px;">
+          Read programs via Settings → Program Sync
         </div>
         <div style="margin-top:4px;">
           <button class="btn danger" id="btnStopProg" onclick="deviceStopProg()" disabled
@@ -993,7 +998,7 @@
 
 <!-- FOOTER -->
 <div class="footer">
-  <span>MBC2 Dashboard v3.4.1 — mic-LABO Motor Boot Camp 2</span>
+  <span>MBC2 Dashboard v3.4.2 — mic-LABO Motor Boot Camp 2</span>
   <span>Frames: <span class="raw-count" id="rawCount">0</span> &nbsp;|&nbsp; Session: <span class="raw-count" id="sessionCount">0</span> rows</span>
 </div>
 
@@ -1358,9 +1363,10 @@ async function deviceStart() {
 
 // START_PROG:n
 async function deviceStartProg() {
-  const progNo = parseInt(document.getElementById('startProgNo').value);
-  if (progNo < 1 || progNo > 50) {
-    showToast('Program number must be 1-50', true);
+  const sel = document.getElementById('startProgSelect');
+  const progNo = sel ? parseInt(sel.value) : NaN;
+  if (!progNo || progNo < 1 || progNo > 50) {
+    showToast('Select a program first', true);
     return;
   }
   // Auto-start recording session if not already recording
@@ -1830,9 +1836,51 @@ function handleProgMessage(line) {
   console.log('[MBC2] Received program', progNo, ':', program.name);
   showToast('Program ' + progNo + ' loaded: ' + program.name);
 
+  updateStartProgDropdown();
+
   // Update UI if program editor is open
   if (typeof updateProgramEditorDisplay === 'function') {
     updateProgramEditorDisplay(progNo);
+  }
+}
+
+function updateStartProgDropdown() {
+  const sel = document.getElementById('startProgSelect');
+  const hint = document.getElementById('startProgHint');
+  if (!sel) return;
+
+  const prev = sel.value;
+  sel.innerHTML = '';
+
+  const slots = Object.keys(devicePrograms).map(Number).sort((a, b) => a - b);
+
+  if (slots.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '— no programs synced —';
+    sel.appendChild(opt);
+    if (hint) hint.style.display = '';
+    return;
+  }
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '— select program —';
+  sel.appendChild(placeholder);
+
+  for (const n of slots) {
+    const p = devicePrograms[n];
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = '[' + n + '] ' + (p.name ? p.name.trim() || '—' : '—');
+    sel.appendChild(opt);
+  }
+
+  if (hint) hint.style.display = 'none';
+
+  // Restore previous selection if it still exists
+  if (prev && sel.querySelector('option[value="' + prev + '"]')) {
+    sel.value = prev;
   }
 }
 

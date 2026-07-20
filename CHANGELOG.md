@@ -4,6 +4,22 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ---
 
+## [3.4.2] — 2026-07-20
+
+### Phase 4 — Program launch panel
+
+#### Added
+
+- **START PROGRAM dropdown** — replaced the raw slot-number input with a named
+  `<select>` that populates from the `devicePrograms` cache. Each entry shows
+  `[n] NAME` for every program read via Settings → Program Sync. When no
+  programs have been synced the dropdown shows "no programs synced" and a hint
+  directs the user to Program Sync.
+- `updateStartProgDropdown()` — called automatically whenever a `PROG:` response
+  arrives so the launcher stays in sync with the cache without user action.
+
+---
+
 ## [3.4.1] — 2026-07-20
 
 ### Code Review Fixes & UX Polish

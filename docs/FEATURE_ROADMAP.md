@@ -65,15 +65,17 @@ Controls to expose:
 
 ---
 
-## Phase 4 — START_PROG:n (launch saved programs)
+## Phase 4 — START_PROG:n (launch saved programs) ✓ COMPLETE
 
 **Goal:** Launch a specific saved program from the dashboard.
 
-- List saved programs (from local DB) with their number
-- Allow user to select and launch with `START_PROG:n`
-- Handle `STATUS:ERR:PROG_NO` gracefully
+- [x] List saved programs (from local DB) with their number
+- [x] Allow user to select and launch with `START_PROG:n`
+- [x] Handle `STATUS:ERR:PROG_NO` gracefully
 
 **Acceptance:** Can select and start a named program from the dashboard UI.
+
+**Completed in v3.4.2** — START PROGRAM section replaced with a dropdown populated from `devicePrograms` cache. Programs synced via Settings → Program Sync appear as `[n] NAME`. `STATUS:ERR:PROG_NO` handled by existing error handler.
 
 ---
 

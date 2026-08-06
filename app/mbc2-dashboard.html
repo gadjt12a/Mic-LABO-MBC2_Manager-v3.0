@@ -1081,6 +1081,10 @@
 // STATE
 // ═══════════════════════════════════════════════════════════════
 let serialConnected = false, eventSource = null, recording = false;
+// True when the session was started by running the motor manually (START).
+// Manual runs report progName 'MANU' for their whole life, so the
+// wait-for-a-program guard below must not apply to them.
+let manualRun = false;
 let sessionData = [], allSessions = {}, rawCount = 0, sessionStart = 0;
 let activeProfileId = null, activeProgramId = null;
 let programLibrary = { version: '1.0', profiles: [] };
@@ -1357,6 +1361,9 @@ async function deviceStart() {
   if (!recording && serialConnected) {
     startRecording();
   }
+  // Set after startRecording(), which clears it: this run is manual, so its
+  // MANU rows are the data, not noise to be skipped.
+  manualRun = true;
   await sendCommand('START');
   const v = parseFloat(document.getElementById('voltageSlider').value);
   if (v > 0) await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
@@ -1374,6 +1381,7 @@ async function deviceStartProg() {
   if (!recording && serialConnected) {
     startRecording();
   }
+  manualRun = false;   // a named program is about to run
   await sendCommand('START_PROG:' + progNo);
   const v = parseFloat(document.getElementById('voltageSlider').value);
   if (v > 0) await sendCommand('SET_VOLTAGE:' + v.toFixed(1));
@@ -2281,7 +2289,7 @@ function parseCSVTelemetry(line) {
     // Auto-detect program start — ignore MANU rows until a real program begins
     const isManual = state.progName === 'MANU' || state.progName === '—' || state.volts === 0;
 
-    if (isManual && sessionData.length === 0) {
+    if (isManual && sessionData.length === 0 && !manualRun) {
       // Still waiting for program to start — show waiting indicator
       document.getElementById('sessionCount').textContent = 'Waiting...';
       return;
@@ -2290,7 +2298,9 @@ function parseCSVTelemetry(line) {
     // Program finished — MBC2 returned to MANU after recording started
     // Use a debounce — only auto-stop after 5 consecutive MANU frames (~5 seconds)
     // This prevents false triggers during cooldown transitions between steps
-    if (isManual && sessionData.length > 0) {
+    // Skipped for manual runs, where MANU is the normal state for the whole
+    // session — those end when the user presses STOP.
+    if (isManual && sessionData.length > 0 && !manualRun) {
       window._manuFrames = (window._manuFrames || 0) + 1;
       if (window._manuFrames >= 5) {
         window._manuFrames = 0;
@@ -2590,6 +2600,7 @@ function startRecording() {
   if (isBenchmarkSelected()) { startBenchmarkSession(); return; }
 
   sessionData = []; sessionStart = Date.now(); recording = true;
+  manualRun = false;   // deviceStart() re-sets this immediately after
   logRowCount = 0;
   document.getElementById('logBody').innerHTML = '';
   document.getElementById('btnRecord').disabled = true;
@@ -2624,6 +2635,7 @@ function startRecording() {
 
 function stopRecording() {
   recording = false;
+  manualRun = false;
   document.getElementById('btnRecord').disabled = !serialConnected;
   document.getElementById('btnStop').disabled = true;
   document.getElementById('runIndicator').style.display = 'none';

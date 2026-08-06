@@ -127,20 +127,42 @@ Controls to expose:
 
 ## Open issues
 
-- **Manual runs produce empty sessions.** Pressing START runs the motor in
-  MANU mode and auto-starts a recording session (`deviceStart`,
-  `mbc2-dashboard.html:1357`), but the recorder discards every row while the
-  device reports `MANU` and no rows have been collected yet (:2280) — it is
-  waiting for a named program to begin. The result is a session record with
-  zero telemetry. Confirmed on hardware 2026-08-06 (sessions 9–12); present
-  on `main` too, so it is not a v4 regression.
-  Decide between: record MANU rows once recording is explicitly active, or
-  stop START from auto-starting a session. Program runs are unaffected —
-  a `BASE` program run recorded 69 rows correctly.
-- **`session_data.raw_line` is always empty.** Every parsed column is stored
-  correctly, so no analysis depends on it, but the original CSV line is not
-  kept for forensics. Decide whether to populate or drop the column
-  (per the schema rules, drop means "leave it and stop writing it").
+- **`session_data.raw_line` is always empty.** Cause found: `autoSaveSession`
+  writes `raw_line: r.raw || ''`, but the row object built in the data handler
+  never sets a `raw` field. Every parsed column is stored correctly, so no
+  analysis depends on it. Decide whether to carry the original CSV line
+  through into the row object, or stop writing the column (per the schema
+  rules, never drop it).
+- **App break-in programs cannot be run from the app.** The `Break-in Program`
+  dropdown selects from the app's own library — it labels the session and
+  drives benchmark mode, but sends nothing to the device. Only `START PROGRAM`
+  can start a run, and it lists device slots read via `GET_PROG`. So a program
+  built in the app cannot be started until it is pushed to a device slot.
+  `SET_PROG` is already implemented (:1872) and is RAM-only until `SAVE`, so a
+  push-and-run flow is achievable without EEPROM wear. See the UI proposal
+  below.
+- **Recording with no motor selected is allowed.** It warns at start and again
+  at save, and the rows stay in memory for CSV export, but nothing reaches the
+  database. Consider making it a blocking confirm rather than a toast.
+
+## Proposed: unify the program controls
+
+Raised by Kris 2026-08-06. The two program lists are different things and the
+UI does not say so: the app library holds programs you *design*, the device
+slots hold programs the hardware can actually *run*.
+
+Proposal — one section containing both, with the device controls beside them:
+
+- Dropdown 1: app library programs
+- Dropdown 2: device slot programs (`GET_PROG` cache)
+- Buttons: START / STOP / PAUSE / NEXT
+- Plus a **Push & Run** action: `SET_PROG:n` the selected app program into a
+  chosen slot (RAM only, no `SAVE`), then `START_PROG:n`. Must state plainly
+  which slot is being overwritten in RAM, and that `SAVE` is never sent.
+
+Without Push & Run this is only a layout change and the two lists stay
+disconnected; with it, app-built programs become runnable, which is the actual
+gap.
 
 ---
 

@@ -418,10 +418,12 @@ path). Four passed; row 3 failed in one of its two paths. Two defects found —
 `MBC2Dashboard-WindowsPortable-4.0.zip` were built 2026-08-06 21:21 and predate
 `37df199` (manual-run recording, 22:05) and `bba72f2` (Push & Run). The loose
 `dist/MBC2Dashboard.exe` is newer (2026-08-07 08:29) but was built ~1 minute
-before the Push & Run commit. The exe and installer were rebuilt **in place**
-at 09:31 to test the two fixes above — good enough for testing, but the
-published set must still be rebuilt from a clean checkout of `main` once the
-fixes are committed, and the portable zip has not been rebuilt at all.
+before the Push & Run commit.
+
+**Resolved 2026-08-07:** all three rebuilt from a clean clone of `main` at
+commit `cb3fe64` and verified against the `BUILD.md` checklist — see the build
+record there. This is the first artefact set to contain the manual-run
+recording, Push & Run, and both test-matrix fixes.
 
 ---
 

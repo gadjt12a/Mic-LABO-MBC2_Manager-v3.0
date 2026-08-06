@@ -39,7 +39,16 @@ need anything.
 4. **Write the entries.** Lead with the change and its consequence. Skip
    internals in `RELEASE_NOTES` and `README`; keep them in `CHANGELOG`.
 
-5. **Commit and push** with a message saying which docs changed and why.
+5. **Check memory for staleness.** Read `MEMORY.md` and any memory file
+   touching what changed. Memory is not a second changelog — do not write the
+   change into it. The job is only to correct entries the change has made
+   wrong, and delete ones it has made obsolete. Memory files are dated
+   snapshots, so a stale one actively misleads: the `v4-packaging-plan` memory
+   once read "plan drafted, work not started" while phases 1–4.7 were
+   complete. Anything the repo now records belongs in the repo, not here.
+
+6. **Commit and push** with a message saying which docs changed and why.
+   Memory lives outside the repo and is not part of that commit.
 
 ## Rules
 

@@ -35,6 +35,74 @@ def _dismiss_splash():
             pass
 
 
+def _enable_dpi_awareness():
+    """Tell Windows we handle scaling ourselves.
+
+    Without this the process is DPI-unaware: Windows sizes the window in
+    physical pixels while WebView2 lays the page out in CSS pixels and then
+    scales it by the display factor. On a 125% display a 1400 px window gets
+    ~1750 px of content and the right edge (Clear, Stop Server) is cut off
+    with no reflow. Must run before the window is created.
+    """
+    if sys.platform != 'win32':
+        return
+    import ctypes
+    try:
+        # Per-monitor v2 — Windows 10 1703+. Correct across mixed-DPI monitors.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # system DPI aware
+        return
+    except Exception:
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()  # Vista+ fallback
+    except Exception:
+        pass
+
+
+def _window_size(preferred=(1400, 900)):
+    """Clamp the window to the usable desktop, in the units pywebview wants.
+
+    create_window takes logical (DPI-scaled) pixels, but webview.screens
+    reports physical ones — on a 125% display that is 1920x1200 vs the 1536x960
+    the window sizes are measured in. Mixing the two silently disables the
+    clamp, so derive everything from the work area and divide by the scale.
+    Work area excludes the taskbar; the margins leave room for the title bar.
+    """
+    w, h = preferred
+    if sys.platform != 'win32':
+        return w, h
+    import ctypes
+
+    # RECT is declared here rather than taken from ctypes.wintypes: PyInstaller
+    # does not bundle wintypes for this app, so importing it works from source
+    # and raises ImportError in the frozen exe - which is exactly how this
+    # clamp silently did nothing on the first attempt.
+    class RECT(ctypes.Structure):
+        _fields_ = [('left', ctypes.c_long), ('top', ctypes.c_long),
+                    ('right', ctypes.c_long), ('bottom', ctypes.c_long)]
+
+    try:
+        scale = ctypes.windll.user32.GetDpiForSystem() / 96.0 or 1.0
+        rect = RECT()
+        # SPI_GETWORKAREA = 0x0030
+        ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+        work_w = int((rect.right - rect.left) / scale)
+        work_h = int((rect.bottom - rect.top) / scale)
+        if work_w > 0 and work_h > 0:
+            w = min(w, work_w - 40)
+            h = min(h, work_h - 60)
+    except Exception as exc:
+        # Never fatal - fall back to the preferred size - but say so, so a
+        # failure here cannot hide again.
+        print(f'[MBC2] window size clamp failed ({exc}); using {w}x{h}')
+    return max(w, 900), max(h, 600)
+
+
 def _start_server():
     srv._prepare()
     with srv.MBC2Server(('127.0.0.1', srv.PORT), srv.MBC2Handler) as httpd:
@@ -56,12 +124,15 @@ def _wait_for_server(timeout: float = 15.0) -> bool:
 
 
 def main():
+    _enable_dpi_awareness()
+    win_w, win_h = _window_size()
+
     # If another MBC2 instance is already running, just open a window onto it.
     if srv._already_running():
         window = webview.create_window(
             f'MBC2 Dashboard v{srv.APP_VERSION}',
             f'http://127.0.0.1:{srv.PORT}',
-            width=1400, height=900, min_size=(900, 600),
+            width=win_w, height=win_h, min_size=(900, 600),
         )
         window.events.loaded += _dismiss_splash
         window.events.closed += lambda: os._exit(0)
@@ -83,7 +154,7 @@ def main():
     window = webview.create_window(
         f'MBC2 Dashboard v{srv.APP_VERSION}',
         f'http://127.0.0.1:{srv.PORT}',
-        width=1400, height=900, min_size=(900, 600),
+        width=win_w, height=win_h, min_size=(900, 600),
     )
     window.events.loaded += _dismiss_splash
     window.events.closed += lambda: os._exit(0)

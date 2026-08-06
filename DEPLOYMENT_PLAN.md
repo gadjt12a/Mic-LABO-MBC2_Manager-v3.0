@@ -314,6 +314,30 @@ size logged in `docs/FEATURE_ROADMAP.md` as UI polish.
 
 Still needs hardware or a person: rows 7–9, 11, 12, 13.
 
+### Phase 4.8 — DPI fix (2026-08-06) ✓ COMPLETE
+
+The clipped right edge seen during row 1 was **not** a CSS problem — the page
+reflows correctly at every width from 800 px up, verified by headless Chrome
+captures at 800/900/1000/1200/1400. The app simply never declared DPI
+awareness, so WebView2 scaled a 1400 CSS px layout by 1.25 into a 1400 physical
+px window and clipped the overflow instead of reflowing.
+
+- [x] `app/app.py` sets per-monitor-v2 DPI awareness before creating the
+      window (falling back to system-aware, then `SetProcessDPIAware`).
+- [x] Window clamped to the desktop work area. Note the unit trap: pywebview's
+      `create_window` takes **logical** px while `webview.screens` reports
+      **physical** px — mixing them silently disables the clamp.
+- [x] The clamp is computed with a locally-declared `RECT` rather than
+      `ctypes.wintypes`, which PyInstaller does not bundle. The first attempt
+      worked from source and silently did nothing in the frozen exe; the
+      fallback now logs instead of failing silently.
+- [x] Verified on the dev machine (1920×1200 physical, 125% scale): window is
+      1400×852 logical, fits the 1536×912 work area, and the full toolbar plus
+      the device-control column render with nothing clipped.
+
+**Artefacts rebuilt again after this fix** — see the build record in
+`BUILD.md`.
+
 ⚠ On the windowed build `/api/shutdown` may return no HTTP response (curl
 reports `000`) because the process exits before flushing it. The port is
 released and no process is orphaned, so this is expected — do not read a

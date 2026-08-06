@@ -47,6 +47,14 @@ the browser's Web Serial API.
   native window, where that API does not exist.
 - "No COM ports found" banner now actually appears when the port list is
   empty (it was being reset to its CSS `display:none`).
+- **Right-hand side of the window was cut off on scaled displays.** The
+  process did not declare DPI awareness, so Windows sized the window in
+  physical pixels while WebView2 laid the page out in CSS pixels and scaled
+  it up — on a 125% display a 1400 px window received ~1750 px of content,
+  hiding Clear, Stop Server and the whole device-control column with no
+  reflow. `app/app.py` now sets per-monitor-v2 DPI awareness before creating
+  the window, and clamps the window to the desktop work area so it cannot
+  open taller than the screen.
 
 ---
 

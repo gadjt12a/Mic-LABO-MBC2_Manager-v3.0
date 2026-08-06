@@ -127,13 +127,7 @@ Controls to expose:
 
 ## UI polish — open
 
-- **Top toolbar overflows at the default window size.** In the packaged app
-  (pywebview, default 1400×900) the control row clips on the right: after
-  `LOAD CSV` the next button is cut mid-label and `EXTRAS ▾` sits hard against
-  the window edge. Observed 2026-08-06 on the v4.0 rebuild; cosmetic only, and
-  resizing or maximising gives the row enough room. Fix by widening the default
-  window in `app/app.py`, or letting the toolbar wrap/scroll below ~1500 px.
-  Pre-existing layout behaviour, not introduced by Phase 4.5.
+*(none currently)*
 
 ---
 

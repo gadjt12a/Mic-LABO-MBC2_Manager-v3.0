@@ -301,9 +301,23 @@ Exe smoke test with `MBC2_DATA_DIR` pointed at a scratch folder: fresh DB
 created, motor models + 6 profiles seeded, daily backup written, `/api/info`
 returned `{"version":"4.0"}`, page and `/api/ping` returned 200, `/api/ports`
 returned `[]` (no device attached), `/api/shutdown` released the port with no
-orphaned process. **This covers matrix rows 1 and 4, and row 10 for the
-HTTP shutdown path.** Not covered: whether the native window actually renders
-(needs eyes on screen) and anything requiring hardware.
+orphaned process. **Covers matrix rows 1 and 4, and row 10 for the HTTP
+shutdown path.**
+
+**Native window verified 2026-08-06** by screen capture of the running exe:
+process exposes a real window handle titled `MBC2 Dashboard v4.0` at 1400×900,
+with the dashboard fully rendered under WebView2. Both Phase 4.6 frontend fixes
+confirmed in the real environment — Connect MBC2 is enabled (it would have been
+permanently disabled by the old `navigator.serial` guard) and the "no COM ports
+found" banner displays. Row 1 complete. Toolbar clipping at the default window
+size logged in `docs/FEATURE_ROADMAP.md` as UI polish.
+
+Still needs hardware or a person: rows 7–9, 11, 12, 13.
+
+⚠ On the windowed build `/api/shutdown` may return no HTTP response (curl
+reports `000`) because the process exits before flushing it. The port is
+released and no process is orphaned, so this is expected — do not read a
+missing 200 as a row 10 failure.
 
 ### Phase 5 — Test matrix & release
 See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all
@@ -315,7 +329,7 @@ three artefacts attached.
 
 | # | Scenario | Expected | Who |
 |---|---|---|---|
-| 1 | Fresh install, no prior data | Empty DB created in new home, motor models seeded, **native window opens** (no browser launched) | scripted |
+| 1 | Fresh install, no prior data | Empty DB created in new home, motor models seeded, **native window opens** (no browser launched) | ✓ **PASSED** 2026-08-06 |
 | 2 | Exe run from inside old v3.x folder (legacy `mbc2.db` beside it) | Data copied to new home, original untouched (hash-verified), moved-note written, one-time notice shown | scripted |
 | 3 | Installer over installer (update) | App files replaced; DB + backups untouched (hash + mtime) | scripted |
 | 4 | Daily backup | First launch of day creates `backups/mbc2-<date>.db`; 15th day prunes oldest | scripted |

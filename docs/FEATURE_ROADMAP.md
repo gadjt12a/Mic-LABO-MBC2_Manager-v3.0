@@ -125,6 +125,18 @@ Controls to expose:
 
 ---
 
+## UI polish — open
+
+- **Top toolbar overflows at the default window size.** In the packaged app
+  (pywebview, default 1400×900) the control row clips on the right: after
+  `LOAD CSV` the next button is cut mid-label and `EXTRAS ▾` sits hard against
+  the window edge. Observed 2026-08-06 on the v4.0 rebuild; cosmetic only, and
+  resizing or maximising gives the row enough room. Fix by widening the default
+  window in `app/app.py`, or letting the toolbar wrap/scroll below ~1500 px.
+  Pre-existing layout behaviour, not introduced by Phase 4.5.
+
+---
+
 ## Deferred / future
 
 These are out of scope until the above phases are stable:
@@ -139,6 +151,8 @@ These are out of scope until the above phases are stable:
 ## Out of scope permanently
 
 - Multi-device support (single MBC2 per session by design)
-- Non-Chrome browser support (Web Serial API is Chrome-only by design)
+- ~~Non-Chrome browser support~~ — no longer a restriction. v4.0 moved serial
+  into Python, so the browser plays no part in device access. Windows packages
+  run in their own window; from source, any modern browser works.
 - Automatic `SAVE` of any kind
 - Inclusion of Christchurch club protocols (PMPE, SPRF) in any shipped seed data

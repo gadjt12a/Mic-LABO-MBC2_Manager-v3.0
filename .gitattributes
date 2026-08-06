@@ -1,0 +1,16 @@
+# Shell scripts must keep LF endings. core.autocrlf=true on the dev machine
+# would otherwise write CRLF into a clean checkout, and macOS then fails the
+# launcher with "bad interpreter: /bin/bash^M". Published Mac packages are
+# built from a clean checkout, so this matters.
+*.command  text eol=lf
+*.sh       text eol=lf
+
+# Windows batch files need CRLF.
+*.bat      text eol=crlf
+
+# Never munge binaries.
+*.png      binary
+*.ico      binary
+*.db       binary
+*.zip      binary
+*.exe      binary

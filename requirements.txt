@@ -1,0 +1,10 @@
+# MBC2 Dashboard — runtime dependencies
+#
+# Required. Serial port access moved from the browser (Web Serial API) into
+# Python in v4.0; without this the app starts but cannot connect to the MBC2.
+pyserial>=3.5
+
+# Optional — only needed to run the native-window entry point (app/app.py).
+# Running app/server.py in a browser does not need it. The packaged Windows
+# exe bundles it already.
+#pywebview>=6.2.1

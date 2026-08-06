@@ -1168,7 +1168,7 @@ async function refreshPorts() {
       const opt = document.createElement('option');
       opt.value = ''; opt.textContent = '— no ports found —';
       sel.appendChild(opt);
-      if (warn) warn.style.display = '';
+      if (warn) warn.style.display = 'block';
     } else {
       if (warn) warn.style.display = 'none';
       for (const p of ports) {
@@ -3547,7 +3547,7 @@ function appAlert(message, title) {
   return appConfirm(message, { title: title || 'Notice', alertOnly: true });
 }
 
-// UI scale — Chrome-only app, so CSS zoom is safe
+// UI scale — CSS zoom; fine in WebView2/Chromium, degrades harmlessly elsewhere
 function setUiScale(pct) {
   document.body.style.zoom = pct + '%';
   localStorage.setItem('mbc2_ui_scale', pct);
@@ -5501,10 +5501,8 @@ window.addEventListener('pagehide', () => {
 });
 
 window.addEventListener('load', () => {
-  if (!('serial' in navigator)) {
-    document.getElementById('noSerialWarning').style.display = 'block';
-    document.getElementById('btnConnect').disabled = true;
-  }
+  // Serial lives in the Python backend now — nothing browser-specific to
+  // check. refreshPorts() owns the "no COM ports" banner.
   loadLibrary();
   initMotorRegistry();
   loadRegisteredMotors();

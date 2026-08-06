@@ -10,6 +10,7 @@ WHAT'S IN THIS PACKAGE
 -----------------------
   Start MBC2 Dashboard.command   <- double-click this to run
   app/                           <- the application files
+  requirements.txt               <- Python packages needed
   README.txt                     <- this file
 
 REQUIREMENTS
@@ -17,10 +18,19 @@ REQUIREMENTS
 1. Python 3 - modern Macs usually have it. If not:
    https://www.python.org/downloads/
 
-2. Chrome or Edge - required for Web Serial API.
-   Safari and Firefox will NOT work.
+2. The pyserial package - REQUIRED to talk to the MBC2. Install it
+   by opening Terminal and running:
 
-3. CH340 driver - needed for the MBC2 USB connection.
+      python3 -m pip install --user pyserial
+
+   The launcher checks for this and will tell you if it is missing.
+   Without it the dashboard opens but cannot connect to the device.
+
+3. A web browser - Chrome or Edge are what we test. Safari and
+   Firefox should also work now that serial runs in Python rather
+   than the browser, but they are untested.
+
+4. CH340 driver - needed for the MBC2 USB connection.
    Mac driver: https://www.wch-ic.com/downloads/CH341SER_MAC_ZIP.html
 
 FIRST RUN
@@ -32,7 +42,9 @@ FIRST RUN
       chmod +x "Start MBC2 Dashboard.command"
 
 3. The app opens in your browser on http://127.0.0.1:8766
-   Connect your MBC2 via USB, then click Connect in the browser.
+   Connect the MBC2 via USB, choose its port from the dropdown at
+   the top of the page (it will look like /dev/tty.usbserial-XXXX
+   or /dev/tty.wchusbserialXXXX), then click "Connect MBC2".
 
 WHERE IS MY DATA?
 -----------------

@@ -4,6 +4,52 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ---
 
+## [4.0] — unreleased
+
+Packaging release: installer, portable/USB build, Mac package, and a move off
+the browser's Web Serial API.
+
+### Added
+
+- **Windows installer** (`MBC2Dashboard-Setup-4.0.exe`, Inno Setup, per-user)
+  and **portable/USB zip** with `Start MBC2 (USB).bat` for data-on-the-stick.
+- **Native window** — `app/app.py` starts the server on a background thread,
+  waits for `/api/ping`, then opens a pywebview window. No browser needed on
+  Windows. PyInstaller splash dismissed on page load.
+- **COM port dropdown** with refresh button, replacing Chrome's port picker.
+- **Separate data home** — `%LOCALAPPDATA%\MBC2Dashboard\` (Mac:
+  `~/Library/Application Support/MBC2Dashboard/`), overridable with
+  `MBC2_DATA_DIR` (this is how USB mode works). Installers can no longer
+  reach the database.
+- **Automatic daily backups** via SQLite's backup API, last 14 kept.
+- **One-time legacy migration** — a `mbc2.db` beside the app is copied (never
+  moved) into the new data home, leaving `DATA-HAS-MOVED.txt` behind.
+- `app/VERSION` as the single source of truth, served via `GET /api/info`.
+- `requirements.txt` (pyserial).
+
+### Changed
+
+- **Serial moved from the browser to Python.** `SerialManager` in
+  `app/server.py` owns the port via pyserial; the UI drives it through
+  `/api/ports`, `/api/serial/connect`, `/api/serial/disconnect`,
+  `/api/serial/send`, and an SSE stream at `/api/serial/stream`. Chrome is no
+  longer required — from source, any modern browser works.
+- Repo restructured into `app/`, `windows/`, `mac/`, `docs/`; root launchers
+  and the old per-platform setup guides absorbed into per-platform READMEs.
+- Browser/window opens only after the socket is bound, replacing a fixed
+  0.8 s timer. A foreign program on port 8766 now gets a plain-English message
+  box instead of a traceback.
+
+### Fixed
+
+- Non-Chromium browser warning banner no longer fires in the packaged app —
+  the old `'serial' in navigator` check disabled the Connect button in the
+  native window, where that API does not exist.
+- "No COM ports found" banner now actually appears when the port list is
+  empty (it was being reset to its CSS `display:none`).
+
+---
+
 ## [3.4.2] — 2026-07-20
 
 ### Phase 4 — Program launch panel

@@ -28,6 +28,7 @@ copy /y "app\mbc2-dashboard.html"           "%STAGE%\app\"  >nul
 copy /y "app\schema.sql"                    "%STAGE%\app\"  >nul
 copy /y "app\default_programs.json"         "%STAGE%\app\"  >nul
 copy /y "app\VERSION"                       "%STAGE%\app\"  >nul
+copy /y "requirements.txt"                  "%STAGE%\"      >nul
 
 powershell -Command "Compress-Archive -Force -Path 'dist\mac-stage\MBC2Dashboard' -DestinationPath 'dist\MBC2Dashboard-Mac-%APPVERSION%.zip'"
 rmdir /s /q "dist\mac-stage"

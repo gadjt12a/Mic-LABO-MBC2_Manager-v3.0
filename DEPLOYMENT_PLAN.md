@@ -1,6 +1,7 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phase 4 complete — hardware test matrix pending*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phases 1–4.6 complete —
+artefacts need rebuilding post-4.5, then the test matrix runs*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -258,6 +259,34 @@ docs/       unchanged (SERIAL_SPEC.md, DB_SCHEMA.md, etc.)
 - [x] `RELEASE_NOTES_v4.md` drafted: upgrade paths, SmartScreen note (TODO:
       screenshot), CH340/ARM64 pin, compatibility policy.
 
+### Phase 4.6 — Docs caught up with 4.5 (2026-08-06) ✓ COMPLETE
+
+Phase 4.5 changed the architecture but only touched code, the spec, `BUILD.md`
+and this plan — every user-facing document still promised a Chrome-based app.
+
+- [x] `CLAUDE.md`: stack table, repo layout, and hard rules rewritten. The
+      "no native window — ever" rule is withdrawn and replaced with
+      "serial belongs in Python" + "two entry points, keep them in sync".
+- [x] `README.md`, `windows/README.txt`, `windows/installer-info.txt`,
+      `mac/README.txt`, `RELEASE_NOTES_v4.md`: Chrome requirement removed for
+      Windows packages; COM-port dropdown flow documented; WebView2 note added.
+- [x] `CHANGELOG.md`: v4.0 entry written.
+- [x] `requirements.txt` added (pyserial); Mac launcher warns when it's
+      missing; Mac build bat ships it. Closes the 4.5 gap where the Mac
+      package could not connect at all.
+- [x] Two frontend bugs found while checking the docs' claims, both fixed:
+      the `'serial' in navigator` guard disabled Connect inside the native
+      window, and the no-ports banner was reset to its CSS `display:none`
+      instead of being shown.
+- [x] Risks table and matrix rows 1, 5, 6, 11 updated for the new architecture.
+
+### Phase 4.7 — Rebuild artefacts (NOT STARTED)
+
+`dist/` still holds pre-4.5 builds: the installer and both zips date from
+15:50–15:51 on 2026-07-20, before the pywebview commit at 19:32. **They ship
+the old browser-based app and must not be released.** Rebuild all three from a
+clean checkout, verify `dist/` contains no `.db`, then run Phase 5.
+
 ### Phase 5 — Test matrix & release
 See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all
 three artefacts attached.
@@ -268,18 +297,19 @@ three artefacts attached.
 
 | # | Scenario | Expected | Who |
 |---|---|---|---|
-| 1 | Fresh install, no prior data | Empty DB created in new home, motor models seeded, app opens in browser | scripted |
+| 1 | Fresh install, no prior data | Empty DB created in new home, motor models seeded, **native window opens** (no browser launched) | scripted |
 | 2 | Exe run from inside old v3.x folder (legacy `mbc2.db` beside it) | Data copied to new home, original untouched (hash-verified), moved-note written, one-time notice shown | scripted |
 | 3 | Installer over installer (update) | App files replaced; DB + backups untouched (hash + mtime) | scripted |
 | 4 | Daily backup | First launch of day creates `backups/mbc2-<date>.db`; 15th day prunes oldest | scripted |
-| 5 | Port 8766 in use by running instance | Browser opens onto existing instance, no second server | scripted |
-| 6 | Port 8766 in use by foreign program | Friendly message box, no traceback | scripted |
+| 5 | Port 8766 in use by running instance | Second exe opens a **pywebview window onto the existing instance** and starts no second server (`app.py:60`, `srv._already_running()`) | scripted |
+| 6 | Port 8766 in use by foreign program | Friendly message box, no traceback, no window (`app.py:72`) | scripted |
 | 7 | USB mode on a second machine | DB created/used on stick; sessions persist across machines | 🧑 KRIS |
 | 8 | Hardware: connect MBC2, record break-in on packaged exe | Rows land in DB (session chip row count), CSV export has data | 🧑 KRIS |
 | 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | 🧑 KRIS |
 | 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | 🧑 KRIS |
-| 11 | Tab close mid-recording | beforeunload warning; connection record closed (`end_reason=tab_closed`) | 🧑 KRIS |
-| 12 | Mac package on a real Mac | Launches, serves, connects (or ships with UNTESTED disclaimer) | 🧑 KRIS / disclaimer |
+| 11 | **Window** close mid-recording (packaged exe) | Connection record closed with `end_reason=tab_closed`. ⚠ **Expected to fail** — `app.py:89` calls `os._exit(0)` on window close, which may kill the process before the `pagehide` beacon is served. Verify; if it fails, close the connection server-side on shutdown instead. | 🧑 KRIS |
+| 11b | Tab close mid-recording (source/Mac, browser) | beforeunload warning; connection record closed (`end_reason=tab_closed`) | scripted |
+| 12 | Mac package on a real Mac | `pyserial` warning shown if absent; launches, serves, connects (or ships with UNTESTED disclaimer) | 🧑 KRIS / disclaimer |
 | 13 | SmartScreen click-through on a machine that hasn't seen the exe | Screenshots captured for release notes | 🧑 KRIS |
 
 ---
@@ -288,7 +318,9 @@ three artefacts attached.
 
 | Risk | Who is affected | Mitigation / instruction |
 |---|---|---|
-| **Chrome/Edge required; cannot be bundled.** Web Serial only exists in Chromium browsers; WebView2 native window is not possible. | Everyone | Stated in installer info page and every README. App already shows a warning banner in non-Chromium browsers. |
+| ~~Chrome/Edge required~~ — **resolved by Phase 4.5.** Serial is server-side; Windows packages run in a pywebview window and need no browser. | — | Docs updated 2026-08-06. Remaining browser dependency is source/Mac only, where any modern browser works. |
+| **WebView2 runtime required on Windows.** pywebview uses it; absent on very old/unpatched Windows 10. | Windows 10 machines that have never updated | Noted in `installer-info.txt`. Present by default on Win11 and current Win10. Not yet verified on a machine without it — worth a test-matrix row if one is available. |
+| **`pyserial` required from source and on Mac.** Without it the app runs but cannot connect. | Mac users, source users | `requirements.txt` added; Mac launcher checks and warns; both READMEs give the pip command. |
 | **CH340 driver required; ARM64 machines need exactly v3.9.2024.9.** No installer may touch drivers. | Everyone; ARM64 users especially | Download link + ARM64 pin in READMEs and installer page; Kris may pre-load the driver on sticks he hands out. |
 | **Zip → installer upgrades don't auto-migrate** (installed exe can't see the old folder). Data is safe but looks lost. | v3.x users moving to the installer | Same TRM playbook: first-run hint + info page → run the new exe once *from the old folder* (auto-migrates), or copy `mbc2.db` into the new data home. |
 | SmartScreen warning on unsigned exe | All new installs | Documented click-through with screenshots; signing deferred (cost). |

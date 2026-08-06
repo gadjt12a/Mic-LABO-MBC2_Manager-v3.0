@@ -16,9 +16,9 @@ not on uninstall. Daily backups are kept automatically in:
 
 REQUIREMENTS
 ------------
-1. BROWSER: Chrome or Edge is required. MBC2 Dashboard uses the
-   Web Serial API, which only exists in Chrome-based browsers.
-   Firefox and Safari will NOT work.
+1. NO BROWSER NEEDED. MBC2 Dashboard runs in its own window. It
+   uses the Microsoft Edge WebView2 runtime, which is already
+   present on Windows 11 and on up-to-date Windows 10 machines.
 
 2. CH340 DRIVER: The MBC2 device uses a CH340 USB-to-serial chip.
    You need the CH340 driver installed on this PC.

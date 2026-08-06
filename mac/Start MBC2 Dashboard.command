@@ -21,10 +21,31 @@ else
     exit 1
 fi
 
+# Serial runs in Python from v4.0 on, so pyserial must be present.
+# Warn but still launch — the dashboard is useful for browsing history
+# without a device attached.
+check_pyserial() {
+    if ! "$1" -c "import serial" &>/dev/null; then
+        echo ""
+        echo "  ------------------------------------------------------------"
+        echo "   WARNING: the 'pyserial' package is not installed."
+        echo ""
+        echo "   The dashboard will open, but it cannot connect to the MBC2"
+        echo "   until you install it. In Terminal, run:"
+        echo ""
+        echo "      $1 -m pip install --user pyserial"
+        echo ""
+        echo "   Then close this window and start the app again."
+        echo "  ------------------------------------------------------------"
+        echo ""
+    fi
+}
+
 # Try Python 3
 if command -v python3 &>/dev/null; then
     VER=$(python3 --version 2>&1)
     if [[ $VER == Python\ 3* ]]; then
+        check_pyserial python3
         echo "  Starting MBC2 Dashboard..."
         echo ""
         python3 "$SERVER"
@@ -36,6 +57,7 @@ fi
 if command -v python &>/dev/null; then
     VER=$(python --version 2>&1)
     if [[ $VER == Python\ 3* ]]; then
+        check_pyserial python
         echo "  Starting MBC2 Dashboard..."
         python "$SERVER"
         exit 0

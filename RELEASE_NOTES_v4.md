@@ -6,6 +6,24 @@
 
 ## What's new in v4
 
+### It's a real app now — no browser required
+
+v3.x ran in a Chrome tab because the browser owned the USB connection. In v4
+the connection moved into the app's own Python backend, which freed the
+dashboard from the browser entirely. The Windows version now opens in its own
+window with its own icon in the taskbar.
+
+Two things follow from this:
+
+- **Chrome is no longer required on Windows.** Firefox-only and Safari-only
+  machines can run the installer and portable builds.
+- **Pick your COM port from a dropdown.** Instead of Chrome's port-permission
+  prompt, the app lists the ports it can see, with a refresh button for when
+  you plug the MBC2 in after starting.
+
+Running from source (and the Mac package) still opens in a browser — but any
+modern browser now works, not just Chrome.
+
 ### One-click Windows installer
 
 Download `MBC2Dashboard-Setup-4.0.exe`, run it, and a desktop icon appears.
@@ -33,8 +51,8 @@ SQLite's own backup API (which correctly checkpoints any WAL file). The last
 
 Unzip `MBC2Dashboard-WindowsPortable-4.0.zip` to a USB stick and double-click
 `Start MBC2 (USB).bat`. Sessions are saved to a `data\` folder on the stick
-and travel with it between machines. The stick needs Chrome and the CH340
-driver on the host PC — stated in the README.
+and travel with it between machines. The host PC needs the CH340 driver — no
+browser and no Python, as stated in the README.
 
 ---
 
@@ -96,5 +114,10 @@ The standard CH340 download page: https://www.wch-ic.com/downloads/CH341SER_EXE.
 
 The Mac package (`MBC2Dashboard-Mac-4.0.zip`) is provided as a convenience but
 is **UNTESTED** — the developers run Windows. It contains Python source files
-and a launcher `.command` script. Requirements: Python 3 + Chrome/Edge + CH340
-driver for Mac. Please report issues via GitHub.
+and a launcher `.command` script, and it opens in a browser rather than a
+native window.
+
+Requirements: Python 3, the `pyserial` package
+(`python3 -m pip install --user pyserial` — the launcher warns if it's
+missing), a browser, and the Mac CH340 driver. Please report issues via
+GitHub.

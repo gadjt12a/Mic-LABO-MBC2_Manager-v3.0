@@ -16,13 +16,20 @@ Download from the [GitHub Releases](../../releases) page.
 
 ---
 
-## Requirements (all platforms)
+## Requirements
 
-- **Chrome or Edge** — Web Serial API is required; Firefox and Safari will not work
+**Every platform:**
+
 - **CH340 driver** — needed for the MBC2 USB connection
   - Download: https://www.wch-ic.com/downloads/CH341SER_EXE.html
   - **ARM64 users (Surface Pro X, Copilot+ PCs):** install exactly **v3.9.2024.9** — newer versions dropped ARM64 support
 - **MBC2 firmware v0.110+** for bidirectional control features
+
+**Windows installer / portable:** nothing else. The app runs in its own window
+— no browser and no Python needed.
+
+**Mac / run from source:** Python 3.8+, the `pyserial` package, and a web
+browser. Chrome and Edge are what we test; other modern browsers should work.
 
 ---
 
@@ -31,7 +38,7 @@ Download from the [GitHub Releases](../../releases) page.
 1. Download `MBC2Dashboard-Setup-4.0.exe`
 2. Run it (click **More info → Run anyway** if SmartScreen appears)
 3. A desktop icon is created; launch it
-4. Chrome or Edge opens at `http://127.0.0.1:8766` — connect your MBC2
+4. The dashboard opens in its own window — pick your MBC2's COM port and click **Connect MBC2**
 
 Your motor database is stored at `%LOCALAPPDATA%\MBC2Dashboard\mbc2.db` and is **never touched by the installer**.
 
@@ -55,10 +62,15 @@ Your motor database is stored at `%LOCALAPPDATA%\MBC2Dashboard\mbc2.db` and is *
 ```
 git clone <repo-url>
 cd Mic-LABO-MBC2_Manager-v3.0
+pip install -r requirements.txt
 python3 app/server.py
 ```
 
-Requires Python 3.8+. No external dependencies. Opens `http://127.0.0.1:8766` in your browser.
+Requires Python 3.8+. Opens `http://127.0.0.1:8766` in your browser.
+
+`pyserial` is the only requirement for talking to the device. To run the
+native-window version instead of a browser tab, also `pip install pywebview`
+and run `python3 app/app.py` (Windows/Mac desktop only).
 
 ---
 
@@ -78,8 +90,8 @@ Requires Python 3.8+. No external dependencies. Opens `http://127.0.0.1:8766` in
 ## Project layout
 
 ```
-app/        server.py, db_manager.py, motor_api.py, mbc2-dashboard.html
-            schema.sql, default_programs.json, VERSION, icon.ico
+app/        app.py, server.py, db_manager.py, motor_api.py, mbc2-dashboard.html
+            schema.sql, default_programs.json, VERSION, icon.ico, splash.png
 windows/    MBC2Dashboard.iss, BUILD EXE.bat, BUILD INSTALLER.bat
             installer-info.txt, USB launcher bats, README.txt
 mac/        Start MBC2 Dashboard.command, BUILD MAC PACKAGE.bat, README.txt
@@ -94,7 +106,9 @@ See [`BUILD.md`](BUILD.md) for developer build instructions.
 
 Full MBC2 bidirectional serial specification: [`docs/SERIAL_SPEC.md`](docs/SERIAL_SPEC.md)
 
-The dashboard communicates via **Web Serial API** at 115200 baud (Chrome / Edge only).
+The dashboard talks to the device from the Python backend via **pyserial** at
+115200 baud. Incoming lines are streamed to the UI over Server-Sent Events
+(`/api/serial/stream`); commands go out over `POST /api/serial/send`.
 
 ---
 

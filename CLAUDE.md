@@ -12,16 +12,17 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 | Layer | Technology |
 |---|---|
-| Backend | Python stdlib `http.server` (no external dependencies) |
+| Backend | Python stdlib `http.server` (+ `pyserial`; `pywebview` for the packaged window) |
 | Frontend | Vanilla JS, single HTML file (`app/mbc2-dashboard.html`) |
 | Database | SQLite (`mbc2.db` in `%LOCALAPPDATA%\MBC2Dashboard\` for packaged; beside `app/` for dev) |
-| Serial | Web Serial API (Chrome only, 115200 baud) |
+| Serial | Server-side `pyserial` at 115200 baud; lines pushed to the UI over SSE |
+| Window | `pywebview` native window (packaged exe); browser at `127.0.0.1:8766` (from source / Mac) |
 | Host | Windows (Microsoft Surface X, ARM64) |
 
 **Working directory:** `C:\kris\Projects\Mic-LABO-MBC2_Manager-v3.0\`
 
 **Repo layout (v4):**
-- `app/` — all source files: `server.py`, `db_manager.py`, `motor_api.py`, `mbc2-dashboard.html`, `schema.sql`, `default_programs.json`, `VERSION`, `icon.ico`
+- `app/` — all source files: `app.py` (pywebview entry point), `server.py`, `db_manager.py`, `motor_api.py`, `mbc2-dashboard.html`, `schema.sql`, `default_programs.json`, `VERSION`, `icon.ico`, `splash.png`
 - `windows/` — Windows build scripts, Inno Setup script, USB launcher bats, READMEs
 - `mac/` — Mac launcher, Mac package build script, Mac README
 - `docs/` — technical reference docs (unchanged)
@@ -33,12 +34,25 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 v4 packaging is complete on the `v4-packaging` branch (pending hardware test
 matrix and merge to `main`). See [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md).
 
-**No native desktop window — ever.** WebView2 does not support the Web Serial
-API. The packaged exe runs the server and opens Chrome/Edge. This is final.
+**Serial is server-side; the packaged app is a native window.** Phase 4.5
+(commit `fa9cc1f`) moved serial out of the browser and into Python. The old
+"no native window — ever" rule existed only because WebView2 lacks the Web
+Serial API; that constraint no longer applies and the rule is withdrawn.
+
+- Packaged exe → `app/app.py` starts the server on a thread, waits for
+  `/api/ping`, then opens a `pywebview` window. **No browser is required.**
+- From source and on Mac → `app/server.py` is the entry point and the UI opens
+  in a browser. Any modern browser works (serial no longer needs Chrome), but
+  Chrome/Edge is what gets tested.
 
 See [`docs/VERSION_HISTORY.md`](docs/VERSION_HISTORY.md) for full history.
 
 Key architectural facts:
+- Serial lives in `SerialManager` (`app/server.py`), exposed as `/api/ports`,
+  `/api/serial/connect`, `/api/serial/disconnect`, `/api/serial/send`, and
+  `/api/serial/stream` (SSE). The frontend holds no serial port object.
+- `pyserial` is imported behind a `try/except` — the app still starts without
+  it and reports `pyserial not installed` on connect.
 - Fully DB-only storage (no CSV files). All session data goes to SQLite.
 - `connections` table tracks device connection lifecycle.
 - `sessions` table has `connection_id` FK, `duration_sec`, `end_reason`.
@@ -64,8 +78,8 @@ Key architectural facts:
 
 - **Incremental changes only.** Do not rewrite large sections of code wholesale. Make targeted, minimal changes.
 - **The frontend is a single file** (`app/mbc2-dashboard.html`). Do not split it into multiple files.
-- **No native desktop window — ever.** WebView2 does not support the Web Serial API. The exe opens Chrome/Edge. Do not attempt pywebview or any embedded browser.
-- **Web Serial API is intentionally Chrome-only.** Do not attempt to add Node.js serial or other browser compatibility.
+- **Serial belongs in Python, not the browser.** All port access goes through `SerialManager` in `app/server.py` using `pyserial`. Do not reintroduce the Web Serial API or add a Node.js serial layer.
+- **Two entry points, and they must stay in sync.** `app/app.py` (packaged, native window) and `app/server.py` (source/Mac, browser). Startup logic — port-conflict handling, `_prepare()`, shutdown — lives in `server.py` so both paths share it. Don't fork that logic into `app.py`.
 - **Serial baud rate is 115200.** Do not change this.
 - **The CH340 driver required is v3.9.2024.9** (ARM64). Newer versions dropped ARM64 support. Do not reference or suggest driver upgrades.
 

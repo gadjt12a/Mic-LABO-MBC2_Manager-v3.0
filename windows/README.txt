@@ -22,14 +22,19 @@ Double-click one of the launcher .bat files - NOT the exe directly:
 
 REQUIREMENTS
 ------------
-1. CHROME OR EDGE - required for Web Serial API (Firefox/Safari won't work).
-   The app opens your default browser automatically.
-
-2. CH340 DRIVER - the MBC2 uses a CH340 USB-to-serial chip.
+1. CH340 DRIVER - the MBC2 uses a CH340 USB-to-serial chip.
    Download: https://www.wch-ic.com/downloads/CH341SER_EXE.html
 
    ARM64 USERS (Surface Pro X, Copilot+ PCs): install exactly
    v3.9.2024.9 - newer versions dropped ARM64 support.
+
+   No browser is needed. The dashboard runs in its own window.
+
+CONNECTING TO THE MBC2
+----------------------
+Plug the MBC2 in, pick its COM port from the dropdown at the top of
+the window, then click "Connect MBC2". Use the refresh button next
+to the dropdown if you plugged the device in after starting the app.
 
 SMARTSCREEN WARNING
 -------------------

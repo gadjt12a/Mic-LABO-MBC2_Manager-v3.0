@@ -95,3 +95,8 @@ Record interpreter and PyInstaller version each time a release build is cut.
 |---|---|---|---|
 | 4.0 | 2026-07-20 | `C:\Users\Kris.Pawson\AppData\Local\Python\pythoncore-3.14-64\python.exe` (3.14.4 AMD64) | 6.21.0 |
 | 4.0 (pywebview) | 2026-07-20 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
+| 4.0 (rebuild, commit `0935ce1`) | 2026-08-06 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
+
+The 2026-08-06 rebuild replaced artefacts that had been built *before* the
+pywebview commit and therefore still shipped the browser-based app. If the
+installer is ~12 MB rather than ~24 MB, it is a pre-4.5 build — discard it.

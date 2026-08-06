@@ -1,7 +1,7 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phases 1–4.6 complete —
-artefacts need rebuilding post-4.5, then the test matrix runs*
+*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phases 1–4.7 complete —
+artefacts rebuilt 2026-08-06; Phase 5 test matrix is all that remains*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -280,12 +280,30 @@ and this plan — every user-facing document still promised a Chrome-based app.
       instead of being shown.
 - [x] Risks table and matrix rows 1, 5, 6, 11 updated for the new architecture.
 
-### Phase 4.7 — Rebuild artefacts (NOT STARTED)
+### Phase 4.7 — Rebuild artefacts (2026-08-06) ✓ COMPLETE
 
-`dist/` still holds pre-4.5 builds: the installer and both zips date from
-15:50–15:51 on 2026-07-20, before the pywebview commit at 19:32. **They ship
-the old browser-based app and must not be released.** Rebuild all three from a
-clean checkout, verify `dist/` contains no `.db`, then run Phase 5.
+`dist/` had held pre-4.5 builds (15:50–15:51 on 2026-07-20, before the 19:32
+pywebview commit) that still shipped the browser-based app. All three rebuilt
+from a clean clone of `0935ce1`, Python 3.14.4 AMD64 / PyInstaller 6.21.0:
+
+| Artefact | Was | Now |
+|---|---|---|
+| `MBC2Dashboard-Setup-4.0.exe` | 11.5 MB | 23.0 MB |
+| `MBC2Dashboard-WindowsPortable-4.0.zip` | 9.4 MB | 21.0 MB |
+| `MBC2Dashboard-Mac-4.0.zip` | 0.08 MB | 0.08 MB (+ `requirements.txt`) |
+
+Verified: exe is x64 (PE machine `0x8664`); zip contents match the `BUILD.md`
+checklist; no `.db` anywhere in `dist/` or inside either zip; no PMPE/SPRF in
+the bundled `default_programs.json`; the Mac `.command` kept LF endings
+through a clean checkout (the `.gitattributes` fix working as intended).
+
+Exe smoke test with `MBC2_DATA_DIR` pointed at a scratch folder: fresh DB
+created, motor models + 6 profiles seeded, daily backup written, `/api/info`
+returned `{"version":"4.0"}`, page and `/api/ping` returned 200, `/api/ports`
+returned `[]` (no device attached), `/api/shutdown` released the port with no
+orphaned process. **This covers matrix rows 1 and 4, and row 10 for the
+HTTP shutdown path.** Not covered: whether the native window actually renders
+(needs eyes on screen) and anything requiring hardware.
 
 ### Phase 5 — Test matrix & release
 See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all

@@ -59,6 +59,8 @@ Key architectural facts:
 - `crash_events` table captures full motor state snapshots on unexpected silence.
 - JS silence watchdog fires after 30 seconds of no data while recording.
 - Loop/round tracking: `loop_number`, `max_loop`, `prog_loop`, `prog_max_loop` captured in session data and crash events.
+- **Two kinds of program, and they are not interchangeable.** The app library holds programs you design (`programLibrary.profiles[].programs[]`, shape `{volts, dir, time:"0:30", cool:"0:00"}`); the device holds 50 slots read via `GET_PROG` into `devicePrograms`. Only device slots can be started. `appProgramToDeviceProgram()` converts between the two shapes — check it first if a pushed program runs with wrong voltages or timings.
+- Manual (MANU) runs are recorded via the `manualRun` flag. The MANU guard in the data handler exists to skip idle frames while waiting for a program to start, and must stay in place for program runs.
 
 ---
 
@@ -101,6 +103,7 @@ Key architectural facts:
 
 - **`SAVE` command writes to EEPROM.** EEPROM has a finite write cycle life. Never call `SAVE` automatically or on a timer. It must always be an explicit deliberate user action. Warn the user before sending it.
 - **`SET_PROG` changes are RAM-only** until `SAVE` is sent. Make this clear in any UI that edits programs.
+- **Push & Run depends on that.** `pushAndRun()` writes an app-library program into a device slot with `SET_PROG` and starts it with `START_PROG`. It must never send `SAVE`, and must keep telling the user the slot is changed in RAM only — that is what makes it safe to use repeatedly.
 - **Program numbers are 1–50 only.** Program No.0 (MANU) cannot be read or written via `GET_PROG`/`SET_PROG`. Always validate before sending.
 
 ### Domain rules

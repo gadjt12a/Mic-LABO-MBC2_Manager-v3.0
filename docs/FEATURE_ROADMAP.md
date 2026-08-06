@@ -133,36 +133,34 @@ Controls to expose:
   analysis depends on it. Decide whether to carry the original CSV line
   through into the row object, or stop writing the column (per the schema
   rules, never drop it).
-- **App break-in programs cannot be run from the app.** The `Break-in Program`
-  dropdown selects from the app's own library — it labels the session and
-  drives benchmark mode, but sends nothing to the device. Only `START PROGRAM`
-  can start a run, and it lists device slots read via `GET_PROG`. So a program
-  built in the app cannot be started until it is pushed to a device slot.
-  `SET_PROG` is already implemented (:1872) and is RAM-only until `SAVE`, so a
-  push-and-run flow is achievable without EEPROM wear. See the UI proposal
-  below.
 - **Recording with no motor selected is allowed.** It warns at start and again
   at save, and the rows stay in memory for CSV export, but nothing reaches the
   database. Consider making it a blocking confirm rather than a toast.
 
-## Proposed: unify the program controls
+## Phase 7 — Unified program controls ✓ COMPLETE (2026-08-07)
 
-Raised by Kris 2026-08-06. The two program lists are different things and the
-UI does not say so: the app library holds programs you *design*, the device
-slots hold programs the hardware can actually *run*.
+Raised by Kris 2026-08-06: the two program lists are different things and the
+UI did not say so. The app library holds programs you *design*; the device
+slots hold programs the hardware can actually *run*. Selecting an app program
+and pressing start ran the motor in MANU, because nothing was sent to the
+device.
 
-Proposal — one section containing both, with the device controls beside them:
+- [x] Both lists moved into one `Break-in Program` section, labelled
+      **In this app** and **On the device**.
+- [x] `PAUSE` and `NEXT` moved there from Device Control — they act on a
+      running program, not on a manual run. Device Control keeps START/STOP,
+      voltage, current limit and direction.
+- [x] **Push & Run** — `SET_PROG:n` the selected app program into a chosen
+      slot, then `START_PROG:n`. RAM-only; `SAVE` is never sent. The confirm
+      names the slot, names what currently occupies it, and states that the
+      stored program returns after a power cycle. Slot validated 1–50 so
+      slot 0 / MANU can never be written.
+- [x] Helpers: `getSelectedAppProgram()`, `appProgramToDeviceProgram()`
+      (library shape → `encodeProgram` shape), `programTimeToSeconds()`.
 
-- Dropdown 1: app library programs
-- Dropdown 2: device slot programs (`GET_PROG` cache)
-- Buttons: START / STOP / PAUSE / NEXT
-- Plus a **Push & Run** action: `SET_PROG:n` the selected app program into a
-  chosen slot (RAM only, no `SAVE`), then `START_PROG:n`. Must state plainly
-  which slot is being overwritten in RAM, and that `SAVE` is never sent.
-
-Without Push & Run this is only a layout change and the two lists stay
-disconnected; with it, app-built programs become runnable, which is the actual
-gap.
+⚠ **Not yet exercised against hardware.** The conversion in
+`appProgramToDeviceProgram()` is the part to check first if a pushed program
+runs with wrong voltages or step timings.
 
 ---
 

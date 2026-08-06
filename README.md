@@ -80,6 +80,7 @@ and run `python3 app/app.py` (Windows/Mac desktop only).
 - **Device control** — START / STOP / PAUSE / RESUME / NEXT STEP / voltage / current limit / direction
 - **Program sync** — read and write device program slots (GET_PROG / SET_PROG)
 - **Program library** — create, edit and store break-in profiles; import/export JSON
+- **Push & Run** — send a program from the library to a device slot and start it in one step (RAM only; the device's saved programs are never overwritten)
 - **Motor registry** — register motors, track break-in history, compare sessions
 - **Benchmark mode** — automated voltage ramp with per-step kV results and efficiency rating
 - **Crash log** — silence watchdog captures full motor state on unexpected data gaps

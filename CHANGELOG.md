@@ -26,6 +26,13 @@ the browser's Web Serial API.
   moved) into the new data home, leaving `DATA-HAS-MOVED.txt` behind.
 - `app/VERSION` as the single source of truth, served via `GET /api/info`.
 - `requirements.txt` (pyserial).
+- **Push & Run** — write a program from the app's own library into a device
+  slot and start it in one action. Previously an app-built program could not
+  be run at all: only programs already stored on the device could be started.
+  The write is **RAM-only — `SAVE` is never sent** — so the slot's stored
+  program returns after a power cycle. The confirmation names the slot and
+  what currently occupies it. Slots are validated 1–50, so program 0 (MANU)
+  can never be overwritten.
 
 ### Changed
 
@@ -34,6 +41,17 @@ the browser's Web Serial API.
   `/api/ports`, `/api/serial/connect`, `/api/serial/disconnect`,
   `/api/serial/send`, and an SSE stream at `/api/serial/stream`. Chrome is no
   longer required — from source, any modern browser works.
+- **Program controls unified.** The app's own programs and the device's slot
+  programs now sit in one `Break-in Program` section, labelled "In this app"
+  and "On the device", so it is clear which list can actually start a run.
+  `PAUSE` and `NEXT` moved there from Device Control, since they act on a
+  running program; Device Control keeps the manual-run controls (START/STOP,
+  voltage, current limit, direction).
+- **Manual motor runs are recorded.** Pressing START auto-starts a session,
+  but every row was discarded while the device reported `MANU` — the recorder
+  was waiting for a named program to begin, so manual runs always saved an
+  empty session. Manual runs are now recognised and recorded; the wait-for-
+  program behaviour is unchanged for program runs.
 - Repo restructured into `app/`, `windows/`, `mac/`, `docs/`; root launchers
   and the old per-platform setup guides absorbed into per-platform READMEs.
 - Browser/window opens only after the socket is bound, replacing a fixed

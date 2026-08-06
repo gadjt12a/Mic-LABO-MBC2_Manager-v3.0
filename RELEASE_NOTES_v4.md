@@ -24,6 +24,26 @@ Two things follow from this:
 Running from source (and the Mac package) still opens in a browser — but any
 modern browser now works, not just Chrome.
 
+### Run your own programs on the device
+
+Programs you build in the app used to be for reference only — the MBC2 can
+only run what is in one of its own 50 slots, so selecting one of your programs
+and pressing start just ran the motor manually.
+
+**Push & Run** fixes that: pick one of your programs, pick a slot, and the app
+writes it to the device and starts it. The write goes to the device's **memory
+only — SAVE is never sent** — so whatever was stored in that slot comes back
+after a power cycle, and no EEPROM write cycles are used.
+
+The two program lists now sit together under **Break-in Program**, labelled
+"In this app" and "On the device", so it is obvious which is which.
+
+### Manual runs are recorded
+
+Starting the motor manually auto-starts a session, but those sessions used to
+save with no data in them — the recorder was waiting for a named program to
+begin. Manual runs are now recorded properly.
+
 ### One-click Windows installer
 
 Download `MBC2Dashboard-Setup-4.0.exe`, run it, and a desktop icon appears.

@@ -125,9 +125,22 @@ Controls to expose:
 
 ---
 
-## UI polish — open
+## Open issues
 
-*(none currently)*
+- **Manual runs produce empty sessions.** Pressing START runs the motor in
+  MANU mode and auto-starts a recording session (`deviceStart`,
+  `mbc2-dashboard.html:1357`), but the recorder discards every row while the
+  device reports `MANU` and no rows have been collected yet (:2280) — it is
+  waiting for a named program to begin. The result is a session record with
+  zero telemetry. Confirmed on hardware 2026-08-06 (sessions 9–12); present
+  on `main` too, so it is not a v4 regression.
+  Decide between: record MANU rows once recording is explicitly active, or
+  stop START from auto-starting a session. Program runs are unaffected —
+  a `BASE` program run recorded 69 rows correctly.
+- **`session_data.raw_line` is always empty.** Every parsed column is stored
+  correctly, so no analysis depends on it, but the original CSV line is not
+  kept for forensics. Decide whether to populate or drop the column
+  (per the schema rules, drop means "leave it and stop writing it").
 
 ---
 

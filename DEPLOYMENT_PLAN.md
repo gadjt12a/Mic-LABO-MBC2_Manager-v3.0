@@ -343,6 +343,35 @@ reports `000`) because the process exits before flushing it. The port is
 released and no process is orphaned, so this is expected — do not read a
 missing 200 as a row 10 failure.
 
+### Phase 4.9 — Hardware validation (2026-08-06) ✓ ROW 8 PASSED
+
+First time a real MBC2 has been connected to the Phase 4.5 serial stack.
+Device on COM8 (`USB-SERIAL CH340`), packaged exe, real data home.
+
+Verified end to end:
+
+| Link | Result |
+|---|---|
+| Port enumeration via pyserial | `COM8 — USB-SERIAL CH340 (COM8)` |
+| Connect at 115200 | opened, connection row written |
+| Reader thread + `/api/serial/stream` SSE | ~1 line/sec, clean CSV |
+| Frontend parse | RPM / volts / amps / kV / temp all correct |
+| Rows persisted | **session 13: 69 rows over 71 s**, rpm 0→13680, kV computed |
+| Connection lifecycle | opened and closed with `end_reason` |
+| Silence watchdog | fired correctly after 119 s, crash event captured full state |
+
+Two findings, neither a v4 regression — both also present on `main`:
+
+1. **Manual (MANU) runs record nothing.** `mbc2-dashboard.html:2280` discards
+   every row while `progName == 'MANU'` and `sessionData` is empty, waiting
+   for a real program to start. But `deviceStart()` (:1357) auto-starts a
+   session when the motor is started manually, so a manual run always leaves
+   an empty session record — sessions 9, 10, 11 and 12 are exactly this.
+   Either manual runs should record, or START should not auto-start a session.
+   Logged in `docs/FEATURE_ROADMAP.md`.
+2. **`session_data.raw_line` is stored empty.** Parsed columns are all correct,
+   so nothing is lost analytically, but the original CSV line is not retained.
+
 ### Phase 5 — Test matrix & release
 See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all
 three artefacts attached.
@@ -360,8 +389,8 @@ three artefacts attached.
 | 5 | Port 8766 in use by running instance | Second exe opens a **pywebview window onto the existing instance** and starts no second server (`app.py:60`, `srv._already_running()`) | scripted |
 | 6 | Port 8766 in use by foreign program | Friendly message box, no traceback, no window (`app.py:72`) | scripted |
 | 7 | USB mode on a second machine | DB created/used on stick; sessions persist across machines | 🧑 KRIS |
-| 8 | Hardware: connect MBC2, record break-in on packaged exe | Rows land in DB (session chip row count), CSV export has data | 🧑 KRIS |
-| 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | 🧑 KRIS |
+| 8 | Hardware: connect MBC2, record break-in on packaged exe | Rows land in DB (session chip row count), CSV export has data | ✓ **PASSED** 2026-08-06 |
+| 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | ◑ partial — program sync (`GET_PROG`) passed; benchmark + Read All Settings still 🧑 KRIS |
 | 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | 🧑 KRIS |
 | 11 | **Window** close mid-recording (packaged exe) | Connection record closed with `end_reason=tab_closed`. ⚠ **Expected to fail** — `app.py:89` calls `os._exit(0)` on window close, which may kill the process before the `pagehide` beacon is served. Verify; if it fails, close the connection server-side on shutdown instead. | 🧑 KRIS |
 | 11b | Tab close mid-recording (source/Mac, browser) | beforeunload warning; connection record closed (`end_reason=tab_closed`) | scripted |

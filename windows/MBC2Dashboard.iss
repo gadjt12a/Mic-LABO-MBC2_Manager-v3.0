@@ -40,22 +40,55 @@ Name: "{autoprograms}\MBC2 Dashboard"; Filename: "{app}\MBC2Dashboard.exe"
 Filename: "{app}\MBC2Dashboard.exe"; Description: "Launch MBC2 Dashboard"; Flags: nowait postinstall skipifsilent
 
 [Code]
+// True while any MBC2Dashboard.exe process still exists.
+function AppStillRunning(): Boolean;
+var
+  Locator, Service, Procs: Variant;
+begin
+  Result := False;
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\CIMV2');
+    Procs := Service.ExecQuery(
+      'SELECT ProcessId FROM Win32_Process WHERE Name = "MBC2Dashboard.exe"');
+    Result := Procs.Count > 0;
+  except
+    // If WMI is unavailable we cannot tell - assume clear and let Restart
+    // Manager have its usual go at it.
+  end;
+end;
+
 // Ask a running instance to shut down before installing,
 // so the exe is never locked mid-update.
 function InitializeSetup(): Boolean;
 var
   WinHttp: Variant;
+  Waited: Integer;
 begin
   Result := True;
   try
     WinHttp := CreateOleObject('WinHttp.WinHttpRequest.5.1');
     WinHttp.Open('GET', 'http://127.0.0.1:8766/api/shutdown', False);
-    WinHttp.SetTimeouts(500, 500, 500, 500);
+    WinHttp.SetTimeouts(2000, 2000, 2000, 2000);
     WinHttp.Send('');
-    Sleep(1500);
   except
     // Not running - nothing to do
   end;
+
+  // The server releases port 8766 at once, but the PyInstaller onefile
+  // bootloader parent outlives it by ~5s and keeps MBC2Dashboard.exe locked.
+  // Restart Manager cannot close that process - it has no message loop - so a
+  // fixed short sleep here left setup aborting with "Setup was unable to
+  // automatically close all applications" (exit code 5) whenever the app was
+  // open, which is the ordinary upgrade path. Wait for the process to actually
+  // go, then give the filesystem a moment to release the handle.
+  Waited := 0;
+  while AppStillRunning() and (Waited < 20000) do
+  begin
+    Sleep(500);
+    Waited := Waited + 500;
+  end;
+  Sleep(500);
 end;
 
 // Remind the user their motor data is untouched after uninstall.

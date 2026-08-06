@@ -373,8 +373,55 @@ Two findings, neither a v4 regression — both also present on `main`:
    so nothing is lost analytically, but the original CSV line is not retained.
 
 ### Phase 5 — Test matrix & release
-See matrix below. Then: merge → `main`, tag `v4.0`, GitHub release with all
-three artefacts attached.
+
+Merge to `main` has happened; `v4-packaging` is fully merged and dead. Still to
+do: fix the two defects below, rebuild artefacts, tag `v4.0`, GitHub release
+with all three artefacts attached.
+
+**Scripted rows run 2026-08-07** (rows 2, 3, 4-prune, 5, 6, and the row 10 HTTP
+path). Four passed; row 3 failed in one of its two paths. Two defects found —
+**both fixed and re-verified the same day**:
+
+1. **Installing over a *running* instance aborts.** `InitializeSetup` does send
+   `GET /api/shutdown` and the server does exit — `server.log` shows
+   `Shutdown requested.` and the port is released. But the PyInstaller onefile
+   **bootloader parent process takes ~5 s to exit**, and the hook sleeps only
+   1500 ms. Restart Manager then finds `MBC2Dashboard.exe` still holding the
+   file, cannot close a process with no message loop, and after 30 s silent
+   setup defaults to Abort:
+   `Setup was unable to automatically close all applications` → exit code **5**,
+   nothing installed, and one orphaned `MBC2Dashboard.exe` left behind. A
+   wizard install shows the same dialog. This is the ordinary upgrade path —
+   users will run the installer with the app open. Fix: poll in
+   `InitializeSetup` until port 8766 is free and no `MBC2Dashboard.exe`
+   remains (cap ~15 s) instead of a fixed `Sleep(1500)`.
+   **Fixed:** `MBC2Dashboard.iss` gained `AppStillRunning()` (WMI query for
+   `MBC2Dashboard.exe`) and `InitializeSetup` now polls it every 500 ms up to
+   20 s after asking the app to shut down, then pauses 500 ms more for the
+   handle to clear. The WinHttp timeouts went 500 ms → 2 s. Re-verified: install
+   over a running instance returns **exit 0** in ~7 s, the Inno log says
+   *"RestartManager found no applications using one of our files"*, and no
+   process is orphaned. A fresh install with nothing running is unaffected.
+2. **The splash screen is never dismissed on the error paths.**
+   `_dismiss_splash` is only wired to the webview `loaded` event, so on the
+   foreign-port path (and the `_wait_for_server()` timeout path) the Tk splash
+   window sits on screen next to the error box until the user clicks OK.
+   Row 6's "no window" expectation is not strictly met. Fix: dismiss the splash
+   before `_foreign_port_error()` and before every early `return` in
+   `app.py:main()`.
+   **Fixed:** `_dismiss_splash()` now runs on both error paths in
+   `app.py:main()` — the foreign-port branch and the `_wait_for_server()`
+   timeout. Re-verified against the squatter: the message box is the only
+   visible window, and dismissing it exits every process with no orphan.
+
+**Artefacts are stale again.** `dist/installer/MBC2Dashboard-Setup-4.0.exe` and
+`MBC2Dashboard-WindowsPortable-4.0.zip` were built 2026-08-06 21:21 and predate
+`37df199` (manual-run recording, 22:05) and `bba72f2` (Push & Run). The loose
+`dist/MBC2Dashboard.exe` is newer (2026-08-07 08:29) but was built ~1 minute
+before the Push & Run commit. The exe and installer were rebuilt **in place**
+at 09:31 to test the two fixes above — good enough for testing, but the
+published set must still be rebuilt from a clean checkout of `main` once the
+fixes are committed, and the portable zip has not been rebuilt at all.
 
 ---
 
@@ -383,15 +430,15 @@ three artefacts attached.
 | # | Scenario | Expected | Who |
 |---|---|---|---|
 | 1 | Fresh install, no prior data | Empty DB created in new home, motor models seeded, **native window opens** (no browser launched) | ✓ **PASSED** 2026-08-06 |
-| 2 | Exe run from inside old v3.x folder (legacy `mbc2.db` beside it) | Data copied to new home, original untouched (hash-verified), moved-note written, one-time notice shown | scripted |
-| 3 | Installer over installer (update) | App files replaced; DB + backups untouched (hash + mtime) | scripted |
-| 4 | Daily backup | First launch of day creates `backups/mbc2-<date>.db`; 15th day prunes oldest | scripted |
-| 5 | Port 8766 in use by running instance | Second exe opens a **pywebview window onto the existing instance** and starts no second server (`app.py:60`, `srv._already_running()`) | scripted |
-| 6 | Port 8766 in use by foreign program | Friendly message box, no traceback, no window (`app.py:72`) | scripted |
+| 2 | Exe run from inside old v3.x folder (legacy `mbc2.db` beside it) | Data copied to new home, original untouched (hash-verified), moved-note written, one-time notice shown | ✓ **PASSED** 2026-08-07 — copy byte-identical (SHA256 `93B7FC77…`), legacy hash *and* mtime unchanged, `DATA-HAS-MOVED.txt` written, log line confirms. `/api/info` read afterwards shows `migrated:false` because the dashboard page had already consumed the one-time flag — that is by design, not a miss. |
+| 3 | Installer over installer (update) | App files replaced; DB + backups untouched (hash + mtime) | ◑ **PARTIAL** 2026-08-07 — with the app **closed**: PASS. Two silent installs left every file in the data home byte- and mtime-identical; a deliberately corrupted installed exe was restored to the correct hash, proving replacement; uninstall removed app, shortcuts and registry entry and left the data home untouched. With the app **running**: was **FAIL** (exit code 5); after the Phase 5 defect 1 fix it is ✓ **PASSED** — exit 0 in ~7 s, no orphan, exe hash correct. |
+| 4 | Daily backup | First launch of day creates `backups/mbc2-<date>.db`; 15th day prunes oldest | ✓ **PASSED** — creation covered 2026-08-06; **prune verified 2026-08-07**: 20 seeded dated backups + today's → pruned to exactly 14, oldest 7 deleted, newest kept. Note `_backup_db()` returns early when today's file already exists, so pruning is skipped on later launches the same day — self-corrects next day. |
+| 5 | Port 8766 in use by running instance | Second exe opens a **pywebview window onto the existing instance** and starts no second server (`app.py:60`, `srv._already_running()`) | ✓ **PASSED** 2026-08-07 — second launch opened a window titled `MBC2 Dashboard v4.0`; the only listener on 8766 remained the original PID. Closing the second window exited both its processes and left the first instance serving. |
+| 6 | Port 8766 in use by foreign program | Friendly message box, no traceback, no window (`app.py:72`) | ✓ **PASSED** 2026-08-07 — against a squatter that accepts but never answers `/api/ping`: message box `MBC2 Dashboard` / "Port 8766 is already in use by another program…", single OK, no traceback, no webview window; OK exits everything with no orphan. A stray Tk splash window (Phase 5 defect 2) was found on the first run and fixed; the retest shows the message box as the only visible window. |
 | 7 | USB mode on a second machine | DB created/used on stick; sessions persist across machines | 🧑 KRIS |
 | 8 | Hardware: connect MBC2, record break-in on packaged exe | Rows land in DB (session chip row count), CSV export has data | ✓ **PASSED** 2026-08-06 |
 | 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | ◑ partial — program sync (`GET_PROG`) passed; benchmark + Read All Settings still 🧑 KRIS |
-| 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | 🧑 KRIS |
+| 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | ◑ partial — `GET /api/shutdown` verified 2026-08-07 (returned 200, port released, both processes gone within ~7 s; the bootloader parent outlives the child by ~5 s). The button itself in the UI is still 🧑 KRIS. ⚠ An orphaned `MBC2Dashboard.exe` **was** observed twice, both times when Restart Manager was simultaneously trying to close the app during an install — see Phase 5 defect 1. |
 | 11 | **Window** close mid-recording (packaged exe) | Connection record closed with `end_reason=tab_closed`. ⚠ **Expected to fail** — `app.py:89` calls `os._exit(0)` on window close, which may kill the process before the `pagehide` beacon is served. Verify; if it fails, close the connection server-side on shutdown instead. | 🧑 KRIS |
 | 11b | Tab close mid-recording (source/Mac, browser) | beforeunload warning; connection record closed (`end_reason=tab_closed`) | scripted |
 | 12 | Mac package on a real Mac | `pyserial` warning shown if absent; launches, serves, connects (or ships with UNTESTED disclaimer) | 🧑 KRIS / disclaimer |

@@ -141,6 +141,10 @@ def main():
 
     # Port taken by something else entirely.
     if srv._port_in_use():
+        # Dismiss the splash first: it is normally closed by the window's
+        # 'loaded' event, which never fires on the error paths, so it would sit
+        # on screen beside the message box until the user clicked OK.
+        _dismiss_splash()
         srv._foreign_port_error()
         return
 
@@ -148,6 +152,7 @@ def main():
     t.start()
 
     if not _wait_for_server():
+        _dismiss_splash()
         srv._foreign_port_error()
         return
 

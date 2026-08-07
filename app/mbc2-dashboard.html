@@ -834,6 +834,12 @@
                  style="width:60px;font-family:var(--mono);font-size:11px;padding:4px 8px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">
           <button class="btn" id="btnSettingsGetProg" onclick="onSettingsGetProg()" disabled style="padding:5px 12px;">⬇ Read from Device</button>
           <button class="btn" id="btnSettingsSetProg" onclick="onSettingsSetProg()" disabled style="padding:5px 12px;">⬆ Write to Device</button>
+          <button class="btn" id="btnSettingsGetAllProg" onclick="requestAllPrograms()" disabled
+                  title="Read every slot 1-50 from the device (read-only, no SAVE)"
+                  style="padding:5px 12px;">⬇⬇ Read All Slots</button>
+          <button class="btn" id="btnSettingsSaveLib" onclick="saveDeviceProgramToLibrary()"
+                  title="Save the program read from this slot into the app's Break-in Program library"
+                  style="padding:5px 12px;">💾 Save to Library</button>
         </div>
         <div id="settingsSyncDisplay" style="font-size:10px;color:var(--text3);"></div>
       </div>
@@ -924,8 +930,9 @@
     <div class="prog-section">
       <div class="chart-label">Break-in Program</div>
 
-      <!-- 1. Programs held in this app. Selecting one labels the session and
-           drives benchmark mode; it does not command the device on its own. -->
+      <!-- 1. Programs held in this app. This is the primary way to run a
+           break-in: the app drives the device step by step over serial, so
+           nothing has to be written to the device first. -->
       <div class="prog-detail-label">IN THIS APP</div>
       <select class="prog-selector" id="progSelector" onchange="onProgSelectorChange()" style="margin-top:3px;">
         <option value="">— Select Program —</option>
@@ -937,33 +944,32 @@
           <option value="Post">Benchmark: Post break-in</option>
         </select>
       </div>
-
-      <!-- Push an app program into a device slot (RAM only) and run it. -->
-      <div style="display:flex;gap:4px;margin-top:4px;align-items:center;">
-        <span style="font-size:9px;color:var(--text3);">SLOT</span>
-        <input type="number" id="pushSlotInput" min="1" max="50" value="1"
-               title="Device slot to write into (RAM only — SAVE is never sent)"
-               style="width:44px;font-family:var(--mono);font-size:10px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);text-align:center;">
-        <button class="btn primary" id="btnPushAndRun" onclick="pushAndRun()" disabled
-                style="flex:1;padding:5px 8px;font-size:10px;">⇪ PUSH &amp; RUN</button>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <button class="btn primary" id="btnStartAppProg" onclick="startAppProgram()" disabled
+                title="Run this program from the app — the app drives the device step by step"
+                style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
       </div>
-      <div style="font-size:9px;color:var(--text3);margin-top:2px;">
-        Writes the selected app program to that slot in RAM, then starts it.
-        SAVE is never sent, so the device's stored programs are untouched.
+      <div id="appRunStatus" style="font-size:9px;color:var(--text3);margin-top:2px;">
+        The app runs the program — nothing is written to the device.
       </div>
 
-      <!-- 2. Programs already stored on the device (GET_PROG cache). -->
+      <!-- 2. Programs already stored on the device (GET_PROG cache). An
+           alternative input: read them in after connecting, run one as-is, or
+           save it into the app library from Settings → Program Sync. -->
       <div class="prog-detail-label" style="margin-top:8px;">ON THE DEVICE</div>
       <div style="display:flex;gap:4px;margin-top:3px;align-items:center;">
         <select id="startProgSelect"
                 style="flex:1;font-family:var(--mono);font-size:10px;padding:3px 5px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);">
           <option value="">— no programs synced —</option>
         </select>
+        <button class="btn" id="btnReadAllProg" onclick="requestAllPrograms()" disabled
+                title="Read every slot 1-50 from the device (read-only, no SAVE)"
+                style="padding:5px 8px;font-size:10px;">⟳ ALL</button>
         <button class="btn primary" id="btnStartProg" onclick="deviceStartProg()" disabled
                 style="flex:1;padding:5px 8px;font-size:10px;">▶ START PROG</button>
       </div>
       <div id="startProgHint" style="font-size:9px;color:var(--text3);margin-top:2px;">
-        Read programs via Settings → Program Sync
+        Press ⟳ ALL to read every device slot, or Settings → Program Sync for one
       </div>
 
       <!-- Controls for whichever program is running. -->
@@ -1270,6 +1276,18 @@ async function connectSerial() {
 }
 
 async function disconnectSerial() {
+  // Stop the motor before dropping the port: an app-driven run is only kept
+  // going by this app, and the device would otherwise sit at the last voltage
+  // it was given with no program to end.
+  if (appRun) {
+    clearTimeout(appRun.timer);
+    appRun = null;
+    if (appRunTicker) { clearInterval(appRunTicker); appRunTicker = null; }
+    try { await sendCommand('STOP'); } catch(e) {}
+    updateAppRunButtons();
+    updateAppRunStatus();
+  }
+
   recording = false;
   stopSilenceWatchdog();
 
@@ -1331,11 +1349,12 @@ let confirmedCurrentLimit = null;
 
 function updateDeviceControlButtons(connected) {
   const btns = ['btnDeviceStart', 'btnDeviceStop', 'btnDevicePause', 'btnDeviceNextStep',
-                'btnDirR', 'btnDirN', 'btnStartProg', 'btnStopProg', 'btnPushAndRun',
+                'btnDirR', 'btnDirN', 'btnStartProg', 'btnStopProg', 'btnStartAppProg',
                 'btnSendCurrentLimit',
                 // Settings tab buttons
                 'btnReadAllSettings', 'btnSaveEepromSettings',
-                'btnSettingsGetProg', 'btnSettingsSetProg'];
+                'btnSettingsGetProg', 'btnSettingsSetProg',
+                'btnReadAllProg', 'btnSettingsGetAllProg'];
   btns.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !connected;
@@ -1362,9 +1381,13 @@ function updateRunStateIndicator() {
     el.style.color = 'var(--text3)';    // Idle/other = grey
   }
 
-  // Update PAUSE button text based on state
+  // Update PAUSE button text based on state. An app-driven run owns this
+  // button — the device's runState describes a manual run it thinks it is
+  // doing, and would flip the label back every frame.
   const pauseBtn = document.getElementById('btnDevicePause');
-  if (pauseBtn) {
+  if (appRun) {
+    updateAppRunButtons();
+  } else if (pauseBtn) {
     if (state.runState === 1) {
       pauseBtn.textContent = '▶ RESUME';
       pauseBtn.onclick = deviceResume;
@@ -1409,6 +1432,15 @@ async function deviceStartProg() {
 
 // STOP
 async function deviceStop() {
+  // Cancel any app-driven program first, or its timer would power the motor
+  // back up for the next step after this STOP.
+  if (appRun) {
+    clearTimeout(appRun.timer);
+    appRun = null;
+    if (appRunTicker) { clearInterval(appRunTicker); appRunTicker = null; }
+    updateAppRunButtons();
+    updateAppRunStatus();
+  }
   await sendCommand('STOP');
   // Auto-stop recording when device stops
   if (recording) {
@@ -1426,22 +1458,26 @@ async function deviceStop() {
 
 // STOP PROG (alias for deviceStop, used by dedicated button)
 async function deviceStopProg() {
+  if (appRun) { await finishAppProgram(false); return; }
   await deviceStop();
 }
 
-// PAUSE
+// PAUSE — the app owns the run when it started it, otherwise the device does
 async function devicePause() {
+  if (appRun) { await pauseAppProgram(); return; }
   await sendCommand('PAUSE');
 }
 
 // RESUME
 async function deviceResume() {
+  if (appRun) { await resumeAppProgram(); return; }
   await sendCommand('RESUME');
 }
 
 // NEXT_STEP (with confirmation)
 async function deviceNextStep() {
   if (!(await appConfirm('Skip to next step? This cannot be undone.', { danger: true, okLabel: 'Skip Step' }))) return;
+  if (appRun) { await nextAppStep(); return; }
   await sendCommand('NEXT_STEP');
 }
 
@@ -1772,6 +1808,15 @@ function decodeProgram(progNo, rawParts) {
   return prog;
 }
 
+// An unused device slot still answers GET_PROG — it comes back with a blank
+// name and every step at 0.0V/OFF/0s. Verified against the device 2026-08-07:
+// slots 1-11 held programs, 12-50 were all blank. Runtime is the reliable
+// test; a program with no step that runs for any time cannot be started.
+function isDeviceProgramEmpty(prog) {
+  if (!prog || !Array.isArray(prog.steps)) return true;
+  return !prog.steps.some(s => (s.runtimeSec || 0) > 0);
+}
+
 // Encode program object to raw values for SET_PROG
 function encodeProgram(prog) {
   const nameIndices = encodeProgName(prog.name);
@@ -1816,6 +1861,14 @@ function handleProgMessage(line) {
   };
 
   console.log('[MBC2] Received program', progNo, ':', program.name);
+
+  // During a full sweep the responses arrive ~7 times a second. Re-rendering
+  // per response fires 50 toasts, rebuilds the 50-entry dropdown 50 times
+  // (resetting the selection each time) and fights the progress text for the
+  // hint element, which makes the panel strobe. requestAllPrograms() renders
+  // once when the sweep finishes instead.
+  if (bulkProgramRead) return;
+
   showToast('Program ' + progNo + ' loaded: ' + program.name);
 
   updateStartProgDropdown();
@@ -1834,7 +1887,11 @@ function updateStartProgDropdown() {
   const prev = sel.value;
   sel.innerHTML = '';
 
-  const slots = Object.keys(devicePrograms).map(Number).sort((a, b) => a - b);
+  // Empty slots are cached (Push & Run needs to know a slot is free) but never
+  // offered as something to start.
+  const slots = Object.keys(devicePrograms).map(Number)
+    .filter(n => !isDeviceProgramEmpty(devicePrograms[n]))
+    .sort((a, b) => a - b);
 
   if (slots.length === 0) {
     const opt = document.createElement('option');
@@ -1876,6 +1933,63 @@ async function requestProgram(progNo) {
   await sendCommand('GET_PROG:' + progNo);
 }
 
+// Read every device slot in one go.
+//
+// The device has no GET_PROG:ALL — unlike settings, programs are strictly
+// per-slot (SERIAL_SPEC 3-3) — so this walks 1..50 and lets the PROG responses
+// arrive over SSE in their own time. GET_PROG only reads, so this never touches
+// EEPROM and never needs SAVE.
+const PROG_READ_INTERVAL_MS = 150;   // pacing between GET_PROG sends
+let bulkProgramRead = false;         // suppresses the per-slot toast while sweeping
+
+async function requestAllPrograms() {
+  if (!serialConnected) { showToast('Not connected', true); return; }
+  if (bulkProgramRead) return;
+
+  const buttons = ['btnReadAllProg', 'btnSettingsGetAllProg', 'btnSettingsGetProg'];
+  const hint = document.getElementById('startProgHint');
+  const display = document.getElementById('settingsSyncDisplay');
+  const hintDefault = hint ? hint.textContent : '';
+
+  bulkProgramRead = true;
+  buttons.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let sent = 0;
+
+  try {
+    for (let n = 1; n <= 50; n++) {
+      const status = 'Reading device slot ' + n + ' of 50…';
+      if (hint) { hint.style.display = ''; hint.textContent = status; }
+      if (display) display.textContent = status;
+      if (!await sendCommand('GET_PROG:' + n)) break;   // link dropped — stop early
+      sent++;
+      await sleep(PROG_READ_INTERVAL_MS);
+    }
+    // The last few responses are still in flight once the loop ends.
+    await sleep(600);
+  } finally {
+    bulkProgramRead = false;
+    buttons.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !serialConnected;
+    });
+    if (hint) hint.textContent = hintDefault;
+  }
+
+  const cached = Object.keys(devicePrograms).length;
+  const used = Object.keys(devicePrograms)
+    .filter(n => !isDeviceProgramEmpty(devicePrograms[n])).length;
+  console.log('[MBC2] Bulk program read: sent', sent, 'requests,', cached,
+              'slots answered,', used, 'hold a program');
+  showToast('Read ' + cached + ' slots — ' + used + ' hold a program');
+  if (display) {
+    display.textContent = 'Read ' + cached + ' of ' + sent + ' slots — ' + used +
+                          ' hold a program, ' + (cached - used) + ' empty.';
+  }
+  updateStartProgDropdown();
+}
+
 // Send a program to device (RAM only until SAVE)
 async function sendProgram(progNo, prog) {
   if (progNo < 1 || progNo > 50) {
@@ -1900,10 +2014,15 @@ async function sendProgram(progNo, prog) {
 // writes the selected app program into a slot with SET_PROG (RAM only, no
 // SAVE) and then starts it with START_PROG.
 
-// The app-library program currently chosen in the "In this app" dropdown.
-// Returns null for no selection and for the special "__baseline__" benchmark
-// entry, which is a mode rather than a program.
+// The program currently chosen in the "In this app" dropdown.
+//
+// The Baseline 3.0V entry is both a program and a mode: the app runs it like
+// any other, and selecting it also puts the session into benchmark mode so the
+// result is saved as a benchmark rather than a break-in session.
 function getSelectedAppProgram() {
+  if (typeof isBenchmarkSelected === 'function' && isBenchmarkSelected()) {
+    return BASELINE_PROGRAM;
+  }
   if (!activeProfileId || !activeProgramId) return null;
   const profile = programLibrary.profiles.find(p => p.id === activeProfileId);
   return profile ? (profile.programs.find(p => p.id === activeProgramId) || null) : null;
@@ -1934,38 +2053,241 @@ function appProgramToDeviceProgram(p) {
   };
 }
 
-async function pushAndRun() {
+// ── APP-DRIVEN PROGRAM RUNNER ─────────────────────────────────────────────────
+// The app is the program engine. Running a library program does not involve the
+// device's program slots at all: the app walks the steps itself, setting
+// direction and voltage and starting/stopping the motor, exactly as it would
+// for a manual run. Device slots are for standalone use — see Settings →
+// Program Sync — and running one of those still uses START_PROG:n.
+let appRun = null;          // null when no app-driven program is running
+let appRunTicker = null;    // 1s interval that refreshes the countdown
+
+function appStepRunSec(s) {
+  return programTimeToSeconds(s.time !== undefined ? s.time : s.runtimeSec);
+}
+
+function appStepCoolSec(s) {
+  return programTimeToSeconds(s.cool !== undefined ? s.cool : s.cooltimeSec);
+}
+
+function appStepVolts(s) {
+  return Number(s.volts !== undefined ? s.volts : s.voltage) || 0;
+}
+
+function appStepDir(s) {
+  const d = String(s.dir || s.direction || 'R').toUpperCase();
+  return (d === 'N') ? 'N' : 'R';   // the device only takes N or R
+}
+
+async function startAppProgram() {
   if (!serialConnected) { showToast('Connect MBC2 first', true); return; }
+  if (appRun) { showToast('A program is already running', true); return; }
 
-  const appProg = getSelectedAppProgram();
-  if (!appProg) { showToast('Select a program under "In this app" first', true); return; }
+  const prog = getSelectedAppProgram();
+  if (!prog) { showToast('Select a program under "In this app" first', true); return; }
 
-  const slot = parseInt(document.getElementById('pushSlotInput').value);
-  if (!slot || slot < 1 || slot > 50) {
-    showToast('Slot must be 1–50 (slot 0 / MANU cannot be written)', true);
+  const steps = (prog.steps || []).filter(s => appStepRunSec(s) > 0);
+  if (!steps.length) {
+    showToast('That program has no steps with a run time', true);
     return;
   }
-
-  const existing = devicePrograms[slot];
-  const occupied = existing ? `\n\nSlot ${slot} currently holds "${existing.name}".` : '';
-  if (!(await appConfirm(
-        `Write "${appProg.name}" into device slot ${slot} and start it?${occupied}` +
-        `\n\nThis changes the slot in the device's RAM only. SAVE is never sent, ` +
-        `so the stored program returns after a power cycle.`,
-        { title: 'Push & Run', okLabel: 'Push & Run' }))) {
-    return;
-  }
-
-  const ok = await sendProgram(slot, appProgramToDeviceProgram(appProg));
-  if (!ok) { showToast('Failed to write program to device', true); return; }
-
-  // Give the device a moment to accept SET_PROG before starting it.
-  await new Promise(r => setTimeout(r, 300));
 
   if (!recording && serialConnected) startRecording();
-  manualRun = false;   // a named program is about to run
-  await sendCommand('START_PROG:' + slot);
-  showToast(`Running "${appProg.name}" from slot ${slot} (RAM only)`);
+  manualRun = false;   // this is a program run, not a manual one
+
+  appRun = {
+    name:      prog.name || 'Program',
+    label:     (prog.mbc2Label || prog.name || 'PROG').toString().trim().slice(0, 4).toUpperCase(),
+    steps:     steps,
+    cycles:    Math.max(1, parseInt(prog.cycles) || 1),
+    cycle:     1,
+    stepIndex: 0,
+    phase:     'run',
+    paused:    false,
+    endsAt:    0,
+    remaining: 0,
+    timer:     null,
+    motorOn:   false,   // tracks whether START is still in effect
+    dir:       null     // direction currently applied to the device
+  };
+
+  showToast(`Running "${appRun.name}" — ${steps.length} step${steps.length > 1 ? 's' : ''}` +
+            ` × ${appRun.cycles} cycle${appRun.cycles > 1 ? 's' : ''}`);
+  if (appRunTicker) clearInterval(appRunTicker);
+  appRunTicker = setInterval(updateAppRunStatus, 1000);
+  updateAppRunButtons();
+  await appRunEnterPhase('run');
+}
+
+// Put the device into the state one step calls for.
+//
+// Order matters and is not obvious: SERIAL_SPEC 3-2 lists SET_VOLTAGE and
+// SET_DIRECTION as "real-time settings (valid during run)", so both are
+// ignored while the device is idle. Setting voltage before START left the
+// motor sitting at 0V with the relay clicking and nothing turning. START must
+// come first, then the settings are applied to the running motor.
+//
+// The voltage is also sent once BEFORE START: if the device honours it the
+// motor never spends a moment at whatever voltage was last used (START resumes
+// at the existing setting, which could be much higher than this step wants),
+// and if it ignores it the authoritative send after START corrects it within a
+// few tens of milliseconds either way.
+// START is only sent when the motor is not already turning. Sending it every
+// step made the device stop and restart at each boundary — rpm visibly dropped
+// to near zero and climbed back — and reset the device's own log, so LOG:HEAD
+// only ever described the final step. Voltage changes ride on the running
+// motor, which is what "valid during run" is for.
+//
+// Direction is the exception: several library programs alternate R and N
+// between steps, and reversing a motor at speed is harsh, so a direction
+// change stops the motor first and starts again cleanly.
+const APP_RUN_CMD_GAP_MS = 120;
+
+async function appRunApplyStep(step) {
+  if (!appRun) return;
+  const volts = appStepVolts(step).toFixed(1);
+  const dir = appStepDir(step);
+  const gap = () => new Promise(r => setTimeout(r, APP_RUN_CMD_GAP_MS));
+
+  if (appRun.motorOn && dir !== appRun.dir) {
+    await sendCommand('STOP');
+    appRun.motorOn = false;
+    await gap();
+  }
+
+  if (!appRun.motorOn) {
+    // Pre-set the voltage so START does not briefly resume at whatever the
+    // device last held, which can be far higher than this step wants.
+    await sendCommand('SET_VOLTAGE:' + volts);
+    await gap();
+    await sendCommand('START');
+    appRun.motorOn = true;
+    await gap();
+    await sendCommand('SET_DIRECTION:' + dir);
+    appRun.dir = dir;
+    await gap();
+  }
+
+  // The ACK echoes the clamped applied value; the existing STATUS handler
+  // updates the confirmed reading from it, so the request is never assumed.
+  await sendCommand('SET_VOLTAGE:' + volts);
+}
+
+// Drive one phase of one step: 'run' powers the motor, 'cool' stops it.
+async function appRunEnterPhase(phase) {
+  if (!appRun) return;
+  const step = appRun.steps[appRun.stepIndex];
+  appRun.phase = phase;
+
+  if (phase === 'run') {
+    await appRunApplyStep(step);
+    appRunSchedule(appStepRunSec(step) * 1000);
+  } else {
+    await sendCommand('STOP');
+    appRun.motorOn = false;
+    appRunSchedule(appStepCoolSec(step) * 1000);
+  }
+  updateAppRunStatus();
+}
+
+function appRunSchedule(ms) {
+  if (!appRun) return;
+  clearTimeout(appRun.timer);
+  appRun.remaining = ms;
+  appRun.endsAt = Date.now() + ms;
+  appRun.timer = setTimeout(appRunAdvance, ms);
+}
+
+// A phase ended: cool down if this step asks for it, else move on.
+async function appRunAdvance() {
+  if (!appRun || appRun.paused) return;
+
+  if (appRun.phase === 'run' && appStepCoolSec(appRun.steps[appRun.stepIndex]) > 0) {
+    await appRunEnterPhase('cool');
+    return;
+  }
+
+  appRun.stepIndex++;
+  if (appRun.stepIndex >= appRun.steps.length) {
+    appRun.stepIndex = 0;
+    appRun.cycle++;
+    if (appRun.cycle > appRun.cycles) {
+      await finishAppProgram(true);
+      return;
+    }
+  }
+  await appRunEnterPhase('run');
+}
+
+async function pauseAppProgram() {
+  if (!appRun || appRun.paused) return;
+  clearTimeout(appRun.timer);
+  appRun.remaining = Math.max(0, appRun.endsAt - Date.now());
+  appRun.paused = true;
+  await sendCommand('STOP');
+  appRun.motorOn = false;
+  updateAppRunButtons();
+  updateAppRunStatus();
+  showToast('Program paused — motor stopped');
+}
+
+async function resumeAppProgram() {
+  if (!appRun || !appRun.paused) return;
+  appRun.paused = false;
+  if (appRun.phase === 'run') {
+    await appRunApplyStep(appRun.steps[appRun.stepIndex]);
+  }
+  appRunSchedule(appRun.remaining);
+  updateAppRunButtons();
+  showToast('Program resumed');
+}
+
+// Skip the rest of this step (and its cool period).
+async function nextAppStep() {
+  if (!appRun) return;
+  clearTimeout(appRun.timer);
+  appRun.paused = false;
+  appRun.phase = 'cool';    // as if the run and cool phases had both finished
+  await appRunAdvance();
+  updateAppRunButtons();
+}
+
+async function finishAppProgram(completed) {
+  if (!appRun) return;
+  const name = appRun.name;
+  clearTimeout(appRun.timer);
+  appRun = null;
+  if (appRunTicker) { clearInterval(appRunTicker); appRunTicker = null; }
+  updateAppRunButtons();
+  updateAppRunStatus();
+  await deviceStop();       // sends STOP, ends the recording and saves it
+  showToast(completed ? `Program "${name}" complete` : `Program "${name}" stopped`);
+}
+
+function updateAppRunButtons() {
+  const start = document.getElementById('btnStartAppProg');
+  if (start) start.disabled = !serialConnected || !!appRun;
+
+  const pause = document.getElementById('btnDevicePause');
+  if (pause && appRun) {
+    pause.textContent = appRun.paused ? '▶ RESUME' : '⏸ PAUSE';
+    pause.onclick = appRun.paused ? resumeAppProgram : pauseAppProgram;
+  }
+}
+
+function updateAppRunStatus() {
+  const el = document.getElementById('appRunStatus');
+  if (!el) return;
+  if (!appRun) {
+    el.textContent = 'The app runs the program — nothing is written to the device.';
+    return;
+  }
+  const left = Math.max(0, Math.round((appRun.endsAt - Date.now()) / 1000));
+  const step = appRun.steps[appRun.stepIndex];
+  el.textContent =
+    `${appRun.paused ? 'PAUSED' : appRun.phase === 'cool' ? 'COOLING' : 'RUNNING'} · ` +
+    `cycle ${appRun.cycle}/${appRun.cycles} · step ${appRun.stepIndex + 1}/${appRun.steps.length} · ` +
+    `${appStepVolts(step).toFixed(1)}V ${appStepDir(step)} · ${formatTime(left)} left`;
 }
 
 // Save all RAM changes to EEPROM (with warning)
@@ -2356,6 +2678,16 @@ function parseCSVTelemetry(line) {
   if (state.kv   > state.maxKv)   state.maxKv   = state.kv;
   if (state.temp > state.maxTemp && state.temp > -270) state.maxTemp = state.temp;
 
+  // During an app-driven run the device is in MANU and knows nothing about the
+  // program, so the app is the authority on which program, cycle and step this
+  // frame belongs to. Applied before the UI and the recorded row are built so
+  // both agree, and so session_data.prog_name reads e.g. BASE rather than MANU.
+  if (appRun) {
+    state.progName = appRun.label;
+    state.cycle = appRun.cycle;
+    state.step = appRun.stepIndex + 1;
+  }
+
   updateMetrics(); updateProgram(); updateCharts(); updateRunStateIndicator();
 
   // Collect benchmark data if benchmark mode is active
@@ -2380,8 +2712,12 @@ function parseCSVTelemetry(line) {
   }
 
   if (recording) {
-    // Auto-detect program start — ignore MANU rows until a real program begins
-    const isManual = state.progName === 'MANU' || state.progName === '—' || state.volts === 0;
+    // Auto-detect program start — ignore MANU rows until a real program begins.
+    // An app-driven run is never "manual": the device reports MANU throughout
+    // (it has no program loaded) and reports 0V during cool periods, either of
+    // which would otherwise stall recording or trip the auto-stop debounce.
+    const isManual = !appRun &&
+      (state.progName === 'MANU' || state.progName === '—' || state.volts === 0);
 
     if (isManual && sessionData.length === 0 && !manualRun) {
       // Still waiting for program to start — show waiting indicator
@@ -3078,29 +3414,42 @@ function renderProgramsTab() {
   }).join('');
 }
 
+// Rebuild the program dropdown, keeping the current selection.
+//
+// This used to build its own list without the Baseline 3.0V entry, while
+// populateProgramDropdownForMotor() built the same <select> *with* it. Both
+// write the same element, so the baseline option appeared when a motor was
+// picked and silently vanished on the next refreshAll() or loadLibrary() —
+// taking benchmark mode with it, since isBenchmarkSelected() looks for exactly
+// that option. One builder now, so they cannot drift apart again.
 function buildProgSelector() {
   const sel = document.getElementById('progSelector');
-  sel.innerHTML = '<option value="">— Select Program —</option>';
-  programLibrary.profiles.forEach(profile => {
-    const group = document.createElement('optgroup');
-    group.label = profile.name + ' (' + (profile.motor||'') + ')';
-    profile.programs.forEach(prog => {
-      const opt = document.createElement('option');
-      opt.value = profile.id + '|' + prog.id;
-      opt.textContent = prog.name + ' — ' + prog.mbc2Label;
-      if (profile.id === activeProfileId && prog.id === activeProgramId) opt.selected = true;
-      group.appendChild(opt);
-    });
-    sel.appendChild(group);
-  });
+  if (!sel) return;
+  const prev = sel.value ||
+    (activeProfileId && activeProgramId ? activeProfileId + '|' + activeProgramId : '');
+
+  populateProgramDropdownForMotor(activeMotorRecord);
+
+  if (prev && sel.querySelector('option[value="' + prev + '"]')) sel.value = prev;
+}
+
+// Library ids are numbers (straight from the DB), but anything arriving from a
+// <select> value or localStorage is a string. Every lookup in this file uses
+// strict ===, so a string id silently matches nothing: selecting a program in
+// the dropdown left activeProfileId as "1" and getSelectedAppProgram() returned
+// null, which is why START PROG said no program was selected.
+function normaliseLibraryId(v) {
+  if (typeof v === 'number' || v === null || v === undefined) return v;
+  return /^\d+$/.test(String(v)) ? Number(v) : v;   // legacy string ids pass through
 }
 
 function onProgSelectorChange() {
   const val = document.getElementById('progSelector').value;
   if (!val) { activeProfileId = null; activeProgramId = null; updateActiveProgramDisplay(); return; }
   const [pid, progid] = val.split('|');
-  activeProfileId = pid; activeProgramId = progid;
-  localStorage.setItem('mbc2_active', JSON.stringify({ profileId:pid, programId:progid }));
+  activeProfileId = normaliseLibraryId(pid); activeProgramId = normaliseLibraryId(progid);
+  localStorage.setItem('mbc2_active',
+    JSON.stringify({ profileId: activeProfileId, programId: activeProgramId }));
   updateActiveProgramDisplay();
   renderDrawer();
 }
@@ -3138,7 +3487,11 @@ function restoreActiveProgram() {
   const stored = localStorage.getItem('mbc2_active');
   if (!stored) return;
   try {
-    const { profileId, programId } = JSON.parse(stored);
+    const raw = JSON.parse(stored);
+    // Older builds stored these as strings — normalise, or the lookup below
+    // fails and the previously active program is silently forgotten.
+    const profileId = normaliseLibraryId(raw.profileId);
+    const programId = normaliseLibraryId(raw.programId);
     const profile = programLibrary.profiles.find(p => p.id === profileId);
     const prog = profile ? profile.programs.find(p => p.id === programId) : null;
     if (profile && prog) {
@@ -3571,6 +3924,63 @@ function buildSettingsGrid() {
   }
   html += '</div>';
   container.innerHTML = html;
+}
+
+// Turn a program read off the device into a stored app-library program — the
+// "copied someone's program at a race meet" path. Reads from the GET_PROG
+// cache, so the slot must have been read in first.
+async function saveDeviceProgramToLibrary() {
+  const slot = parseInt(document.getElementById('settingsSyncProgNo').value);
+  if (!slot || slot < 1 || slot > 50) { showToast('Program # must be 1-50', true); return; }
+
+  const prog = devicePrograms[slot];
+  if (!prog) { showToast('Read slot ' + slot + ' from the device first', true); return; }
+  if (isDeviceProgramEmpty(prog)) { showToast('Slot ' + slot + ' is empty', true); return; }
+
+  const label = (prog.name || '').trim() || ('SLOT' + slot);
+  const steps = prog.steps.filter(s => (s.runtimeSec || 0) > 0);
+
+  // The device supports pulsed directions; program_steps only stores F/R/N, so
+  // NP/RP are saved as their base direction and the user is told.
+  const pulsed = steps.some(s => s.direction === 'NP' || s.direction === 'RP');
+
+  const profileName = `Device slot ${slot} — ${label}`;
+  if (!(await appConfirm(
+        `Save "${label}" from device slot ${slot} into the app library?` +
+        `\n\nIt will appear under "In this app" as a new profile named` +
+        `\n"${profileName}", with ${steps.length} step${steps.length > 1 ? 's' : ''}.` +
+        (pulsed ? '\n\nPulsed steps (NP/RP) will be saved as N/R — the app library has no pulse mode.' : ''),
+        { title: 'Save to Library', okLabel: 'Save' }))) {
+    return;
+  }
+
+  const payload = { version: '3.0', profiles: [{
+    name:  profileName,
+    motor: null, chassis: null, class: null,
+    notes: `Read from MBC2 slot ${slot} on ${new Date().toISOString().slice(0, 10)}.`,
+    programs: [{
+      name:      label,
+      mbc2Label: label,
+      cycles:    prog.cycles || 1,
+      targetRpm: prog.targetRpm || null,
+      notes:     null,
+      steps: steps.map(s => ({
+        volts: s.voltage,
+        dir:   String(s.direction).startsWith('N') ? 'N' : 'R',
+        time:  s.runtimeSec,
+        cool:  s.cooltimeSec
+      }))
+    }]
+  }]};
+
+  const res = await apiPost('/api/profiles/import', payload);
+  if (!res || res.error) { showToast('Save failed' + (res && res.error ? ': ' + res.error : ''), true); return; }
+  if (!res.imported) {
+    showToast(`"${profileName}" is already in the library`, true);
+    return;
+  }
+  showToast(`Saved "${label}" to the library`);
+  if (typeof loadLibrary === 'function') await loadLibrary();
 }
 
 // Program sync handlers for Settings tab
@@ -4380,15 +4790,19 @@ let sessionProgramId = null;   // program_id for current recording session
 let sessionDbId = null;        // DB session_id after creation
 let registeredMotors = [];     // cached motor list
 
-// Baseline program — always available, not in program library
+// Baseline benchmark — always available, not in the program library.
+// A catch-all 3.0V run: one step, three minutes, R like every other break-in
+// on these chassis. (It was previously two 2-minute steps with a cool period
+// between them, the first of which ran in F — neither the 3 minutes the
+// benchmark timer assumes nor the direction this app uses.)
 const BASELINE_PROGRAM = {
   id: '__baseline__',
   name: 'Baseline 3.0V',
   mbc2Label: 'BASE',
   isBaseline: true,
+  cycles: 1,
   steps: [
-    { volts: 3.0, dir: 'F', time: '2:00', cool: '1:00' },
-    { volts: 3.0, dir: 'R', time: '2:00', cool: 'Full Cool' }
+    { volts: 3.0, dir: 'R', time: '3:00', cool: '0:00' }
   ]
 };
 
@@ -5173,9 +5587,11 @@ function startBenchmarkCountdown() {
   benchmarkStart = Date.now();
   benchmarkWaiting = false;
 
-  // Calculate actual duration from program steps + buffer for transitions
-  const activeProfile = programLibrary.profiles.find(p => p.id === activeProfileId);
-  const activeProg = activeProfile?.programs?.find(p => p.id === activeProgramId);
+  // Calculate actual duration from program steps + buffer for transitions.
+  // Goes through getSelectedAppProgram() so the baseline benchmark — which is
+  // not in the library — reports its own 3 minutes rather than falling back to
+  // the BENCHMARK_DURATION constant.
+  const activeProg = getSelectedAppProgram();
   if (activeProg?.steps) {
     const stepSecs = activeProg.steps.reduce((sum, s) => sum + parseTimeString(s.time) + parseTimeString(s.cool), 0);
     const transitionBuffer = (activeProg.steps.length - 1) * 3; // ~3s per transition

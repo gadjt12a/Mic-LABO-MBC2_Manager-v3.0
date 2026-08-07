@@ -609,7 +609,15 @@ def import_programs_from_json(json_path: str) -> int:
 
 
 def get_all_profiles() -> list:
-    """Get all profiles with their program names for UI display."""
+    """Get all profiles with their programs and each program's steps.
+
+    Steps are included because this is what the dashboard builds its whole
+    program library from (loadLibrary -> /api/profiles). Without them every
+    library program loads with an empty steps array, which silently breaks
+    anything that converts a library program into a device program — Push &
+    Run wrote a step-less program to the device and started it, so the motor
+    ran in MANU instead of the program.
+    """
     with get_connection() as conn:
         profiles = conn.execute(
             "SELECT * FROM profiles ORDER BY name"
@@ -622,7 +630,16 @@ def get_all_profiles() -> list:
                 FROM programs WHERE profile_id = ?
                 ORDER BY step_order
             """, (p['profile_id'],)).fetchall()
-            p['programs'] = [dict(pr) for pr in programs]
+            p['programs'] = []
+            for pr in programs:
+                pr = dict(pr)
+                steps = conn.execute("""
+                    SELECT step_id, step_order, volts, direction, duration_sec, cool_sec, notes
+                    FROM program_steps WHERE program_id = ?
+                    ORDER BY step_order
+                """, (pr['program_id'],)).fetchall()
+                pr['steps'] = [dict(s) for s in steps]
+                p['programs'].append(pr)
             result.append(p)
         return result
 

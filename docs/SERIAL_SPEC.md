@@ -95,6 +95,22 @@ All commands are ASCII, terminated with `\n` (or `\r`).
 
 > **Important:** `SET_VOLTAGE` and `SET_CURRENT_LIMIT` responses echo the **clamped actual value**, not what was requested. Always update state from the ACK, not the sent command.
 
+> **"Valid during run" is literal** (confirmed on hardware 2026-08-07). These
+> settings only take effect while the motor is running. `SET_VOLTAGE` sent
+> before `START` is acknowledged but does nothing — the motor starts at 0V and
+> you get the direction relay clicking with nothing turning. Always `START`
+> first, then apply direction and voltage.
+>
+> Two consequences for anything that drives the device step by step:
+> - `START` **restarts the run**. Sending it once per step stops and restarts
+>   the motor at every boundary (rpm visibly drops to near zero) and resets the
+>   device's internal log, so the `LOG:` dump on `STOP` describes only the final
+>   step. Send `START` once, then change voltage on the fly.
+> - `START` resumes at **whatever voltage the device last held**, which may be
+>   far higher than the next step wants. Set the target voltage before `START`
+>   as well — it is ignored while idle, but harmless — and again immediately
+>   after, so a stale high voltage is never applied even briefly.
+
 ### 3-3. Program read/write (No.1–50 only)
 
 | Command | Action | Response |

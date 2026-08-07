@@ -158,9 +158,49 @@ device.
 - [x] Helpers: `getSelectedAppProgram()`, `appProgramToDeviceProgram()`
       (library shape → `encodeProgram` shape), `programTimeToSeconds()`.
 
-⚠ **Not yet exercised against hardware.** The conversion in
-`appProgramToDeviceProgram()` is the part to check first if a pushed program
-runs with wrong voltages or step timings.
+⚠ **Superseded 2026-08-07 by Phase 8** — see below. Push & Run was built on the
+assumption that only device slots can run, which is not how this tool is meant
+to work, and it never functioned against hardware.
+
+---
+
+## Phase 8 — App-driven program runner ✓ COMPLETE (2026-08-07)
+
+The first hardware test of Push & Run revealed the model was wrong. The app is
+the program engine: selecting a library program and pressing START PROG makes
+the app walk the steps over serial. Device slots are for standalone running and
+for importing programs built elsewhere — an alternative input, not the run path.
+
+- [x] `startAppProgram()` and the `appRun` state machine: per step `START`,
+      `SET_DIRECTION`, `SET_VOLTAGE`, hold for the run time, `STOP` and wait for
+      any cool time, repeat for the cycle count.
+- [x] STOP / PAUSE / NEXT act on whichever run is active. PAUSE stops the motor
+      and freezes the clock; RESUME re-applies the step; NEXT skips the rest of
+      the step and its cool.
+- [x] `START` is sent only when the motor is not already turning; a direction
+      change stops it first rather than reversing at speed.
+- [x] Recording treats an app-driven run as a program run — the device reports
+      `MANU` throughout and 0V during cool, either of which previously stalled
+      recording or tripped the auto-stop. Rows carry the program label, cycle
+      and step from the runner.
+- [x] Push & Run removed from Device Control; writing a slot stays in
+      Settings → Program Sync.
+- [x] ⟳ ALL reads all 50 slots (no `GET_PROG:ALL` exists); empty slots hidden.
+- [x] 💾 Save to Library turns a slot read off a device into a stored profile.
+- [x] Baseline 3.0V restored to the program dropdown and redefined as a single
+      3-minute 3.0V R step; it now runs app-driven like anything else.
+
+Five defects found by hardware, none visible without it:
+
+1. `get_all_profiles()` returned programs with **no steps**, so every library
+   program loaded empty and any conversion produced a step-less program.
+2. The program dropdown wrote **string** ids while the library holds numbers,
+   and every lookup uses `===` — selecting a program matched nothing.
+3. `SET_VOLTAGE` before `START` is ignored (SERIAL_SPEC 3-2 "valid during run").
+4. `START` per step restarted the motor and reset the device log.
+5. Two builders wrote the program dropdown; the one without the Baseline entry
+   overwrote the one with it, making benchmark mode unreachable — which is why
+   the `benchmarks` table had never held a single row.
 
 ---
 

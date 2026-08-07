@@ -59,7 +59,21 @@ Key architectural facts:
 - `crash_events` table captures full motor state snapshots on unexpected silence.
 - JS silence watchdog fires after 30 seconds of no data while recording.
 - Loop/round tracking: `loop_number`, `max_loop`, `prog_loop`, `prog_max_loop` captured in session data and crash events.
-- **Two kinds of program, and they are not interchangeable.** The app library holds programs you design (`programLibrary.profiles[].programs[]`, shape `{volts, dir, time:"0:30", cool:"0:00"}`); the device holds 50 slots read via `GET_PROG` into `devicePrograms`. Only device slots can be started. `appProgramToDeviceProgram()` converts between the two shapes — check it first if a pushed program runs with wrong voltages or timings.
+- **The app is the program engine.** Running a break-in program does not involve
+  the device's program slots at all. `startAppProgram()` walks the steps itself
+  — `START`, then `SET_DIRECTION` / `SET_VOLTAGE` per step, `STOP` for cool
+  periods — exactly as a manual run would. STOP/PAUSE/NEXT act on that run.
+- **Two kinds of program, and they are not interchangeable.** The app library
+  holds programs you design (`programLibrary.profiles[].programs[]`, shape
+  `{volts, dir, time:"0:30", cool:"0:00"}`); the device holds 50 slots read via
+  `GET_PROG` into `devicePrograms`. Device slots exist for **standalone use** —
+  running the MBC2 on the bench without the laptop — and for importing a
+  program someone else built. They are an alternative input, not the way
+  programs are run. `START_PROG:n` still runs a device slot directly.
+- **Device slot contents are not persistent app state.** They live only in
+  `devicePrograms`, so they must be re-read (⟳ ALL) after every connect. Empty
+  slots answer `GET_PROG` with a blank name and all steps at 0.0V/OFF/0s;
+  `isDeviceProgramEmpty()` is the test, and the dropdown hides them.
 - Manual (MANU) runs are recorded via the `manualRun` flag. The MANU guard in the data handler exists to skip idle frames while waiting for a program to start, and must stay in place for program runs.
 
 ---
@@ -103,7 +117,11 @@ Key architectural facts:
 
 - **`SAVE` command writes to EEPROM.** EEPROM has a finite write cycle life. Never call `SAVE` automatically or on a timer. It must always be an explicit deliberate user action. Warn the user before sending it.
 - **`SET_PROG` changes are RAM-only** until `SAVE` is sent. Make this clear in any UI that edits programs.
-- **Push & Run depends on that.** `pushAndRun()` writes an app-library program into a device slot with `SET_PROG` and starts it with `START_PROG`. It must never send `SAVE`, and must keep telling the user the slot is changed in RAM only — that is what makes it safe to use repeatedly.
+- **Writing a slot depends on that.** Settings → Program Sync → ⬆ Write to
+  Device writes an app-library program into a slot with `SET_PROG`. It must
+  never send `SAVE`, and must keep telling the user the slot is changed in RAM
+  only. (The old Push & Run button in Device Control, which wrote a slot and
+  immediately started it, has been removed — running is app-driven now.)
 - **Program numbers are 1–50 only.** Program No.0 (MANU) cannot be read or written via `GET_PROG`/`SET_PROG`. Always validate before sending.
 
 ### Domain rules

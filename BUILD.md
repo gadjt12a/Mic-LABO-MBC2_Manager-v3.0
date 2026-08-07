@@ -98,12 +98,25 @@ Record interpreter and PyInstaller version each time a release build is cut.
 | 4.0 (rebuild, commit `0935ce1`) | 2026-08-06 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 | 4.0 (DPI fix, commit `22a05c3`) | 2026-08-06 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 | 4.0 (test-matrix fixes, commit `cb3fe64`) | 2026-08-07 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
+| **4.0 RELEASE, commit `c335703`** | 2026-08-07 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 
 The 2026-08-06 rebuild replaced artefacts that had been built *before* the
 pywebview commit and therefore still shipped the browser-based app. If the
 installer is ~12 MB rather than ~24 MB, it is a pre-4.5 build — discard it.
 
-The 2026-08-07 rebuild is the first to be cut from a clean clone of `main`
+**Release build, 2026-08-07, commit `c335703`.** Cut from a clean clone of
+`main` after the app-driven runner, ACK checking and connection-close work.
+Sizes: exe 21.28 MB, installer 23.04 MB, portable zip 21.07 MB, Mac zip
+0.09 MB. Verified: PE machine `0x8664`; both zips match the checklist above; no
+`.db` in `dist/` or inside either zip; no PMPE/SPRF in the bundled
+`default_programs.json`; Mac `.command` LF-only (0 CRLF). Smoke test against a
+scratch data dir: fresh DB seeded, daily backup written, `/api/info` → 4.0,
+native window titled `MBC2 Dashboard v4.0`, `/api/ports` enumerated
+`COM8 — USB-SERIAL CH340`, and the served page confirmed to carry the relative
+`API`, the app-driven runner and the ACK checking. `/api/shutdown` returned 200
+with no orphaned process and the port released.
+
+The earlier 2026-08-07 rebuild was the first to be cut from a clean clone of `main`
 (commit `cb3fe64`) rather than the `v4-packaging` branch, and the first to
 carry the installer shutdown-wait and splash-dismissal fixes. Sizes: exe
 21.3 MB, installer 23.0 MB, portable zip 21.1 MB, Mac zip 0.08 MB. Verified:

@@ -469,11 +469,11 @@ before the Push & Run commit.
 commit `cb3fe64` and verified against the `BUILD.md` checklist — see the build
 record there.
 
-⚠ **Stale again as of `a6a5e86`.** The debugging session that produced the
-app-driven runner rebuilt `dist\MBC2Dashboard.exe` repeatedly from the working
-folder, so what is in `dist/` now is neither a clean-checkout build nor the
-current code. Rebuild all three from a clean clone of `main` before tagging
-`v4.0`.
+**Release artefacts rebuilt 2026-08-07 from a clean clone of `main` at
+`c335703`** — after the app-driven runner, ACK checking, connection-close and
+same-origin fixes. All four verified against the `BUILD.md` checklist and
+smoke-tested; see the build record there. These are the artefacts to attach to
+the `v4.0` release.
 
 ---
 

@@ -361,17 +361,31 @@ ACCEL_LOAD,<pass>,<No_rpm>,<No_mA>,<R_mohm?>,<?>,<Lo_rpm>,<Lo_mA>,<Hi_rpm>,<Hi_m
 | Hi mA | 2190 / 2174 | 2114 / 2150 | **constant** |
 
 **The load levels are defined by current, not voltage.** Raising the test
-voltage by a third left all three current figures unchanged (~750 / ~830 /
-~2150 mA) while every RPM rose. Currents do not stay fixed under a voltage
-increase unless they are the quantity being held fixed — so AccelTest reports
-**the RPM the motor achieves at three fixed current draws**. This is what makes
-the numbers comparable between motors: same electrical input, different
-mechanical output.
+voltage by a third left all three current figures unchanged while every RPM
+rose. Currents do not stay fixed under a voltage increase unless they are the
+quantity being held fixed — so AccelTest reports **the RPM the motor achieves at
+three fixed current draws**. Confirmed on two motors at two voltages each.
+
+**The current targets are per motor, not device constants.** A second box-stock
+motor gave ~700 / ~790 / ~1900 mA against the first motor's ~750 / ~830 /
+~2150 mA — steady across voltage within each motor, but 5–12% lower throughout.
+The device evidently derives them during the `ACCEL_CK` / `ACCEL_STALL` phase.
+**Anything storing these results must record the actual currents**; two motors'
+RPMs are measured at similar, not identical, loads.
+
+**f5 is probably winding resistance in mΩ.** Steady within a motor (1441/1451),
+clearly different between motors (1653/1651 for the second), and it rises a few
+percent as the motor warms — 1441 → 1527 and 1653 → 1791 between the 3.0V and
+4.0V runs. The physics is self-consistent: the higher-resistance motor drew less
+current *and* ran slower off-load. Three independent observations agreeing, but
+still not confirmed by mic-LABO.
 
 **f6 was wrongly guessed as kV in an earlier revision of this file.** It is not:
 kV is a motor constant and would not move, but f6 went 5660 → 8071, and the two
-passes at 4.0V disagree by 8% where every other field agrees within 2%. Left
-undocumented rather than assigned a plausible-sounding meaning.
+passes at 4.0V disagree by 8% where every other field agrees within 2%. Across
+four runs it scales roughly with voltage (×1.3–1.5 for a ×1.33 change) but too
+noisily to pin down. Left undocumented rather than assigned a plausible-sounding
+meaning.
 
 `ACCEL_STALL` fields beyond `<pass>,<n>` are undecoded. Firmware also contains a
 `STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` header that neither

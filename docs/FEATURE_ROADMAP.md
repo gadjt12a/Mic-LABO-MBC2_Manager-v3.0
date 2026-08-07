@@ -255,9 +255,26 @@ seconds per pass. Because the loads are fixed *currents*, results are directly
 comparable between motors in a way peak RPM never was: same electrical input,
 different mechanical output. See the appendix in `docs/SERIAL_SPEC.md`.
 
-Why this is worth building: the app currently ranks motors on free-running RPM,
-which is the number least related to how a car actually accelerates. A loaded
-figure is closer to what wins races, and it costs 3 minutes per motor.
+Why this is worth building, demonstrated on two box-stock motors at 3.0V:
+
+| | Motor 1 (N/R) | Motor 2 (N/R) |
+|---|---|---|
+| No-load | 19,080 / 18,980 | 16,560 / 16,580 |
+| High-load | 8,970 / 8,918 | **9,058 / 9,690** |
+
+Motor 1 is 15% faster free-running — the only figure the app records today — yet
+motor 2 matches it under load and beats it by 8.7% in reverse. Peak RPM would
+have picked the wrong motor.
+
+**Two constraints this data imposes on the design:**
+
+1. **The ranking inverts with test voltage.** At 4.0V the same two motors swap
+   places under high load (15,125/14,645 vs 14,320/14,037). Only ever compare
+   tests taken at the same voltage, and never present a single "best motor"
+   verdict from one test.
+2. **Current targets are per motor**, not device constants — ~750/830/2150 mA
+   for motor 1 against ~700/790/1900 mA for motor 2. Store the actual currents;
+   comparisons are near-like-for-like, not exact.
 
 **Constraint that shapes the design: the app cannot start an AccelTest.** No
 serial command exists for it; the test is started on the device. So every step
@@ -296,8 +313,11 @@ below is passive — the app watches for `ACCEL_*` lines and records what arrive
 - `STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` exists in firmware
   but neither run produced it. Find what triggers it; per-pulse data would be
   richer still.
-- Whether the current targets are fixed constants or vary by motor/voltage —
-  two runs is not enough to be sure they are literally constant.
+- ~~Whether the current targets are fixed constants or vary by motor/voltage.~~
+  **Answered:** constant across voltage within a motor, but 5–12% different
+  between two motors. Store the actual values.
+- Whether a *different type* of motor (dash, torque-tuned) still produces
+  comparable load levels. Both motors tested so far were box stock.
 
 Ask Michihiro only what the data cannot answer, and only after more runs.
 

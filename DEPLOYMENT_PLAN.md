@@ -390,17 +390,29 @@ Exactly 30 s per step at the right voltages, `mode=BASE` rather than `MANU`
 `LOG:STEP` dump for the same stop. One stray 0 mV row at the step 3 boundary is
 the stop/restart artefact from before the `START`-per-step fix.
 
+A second run (session 26) after the `START`-once fix confirms it works: 30 rows
+at 1000 mV then 5 at 1500 mV, with step 2 opening at 6,420 rpm straight off step
+1's 6,900 — where session 23's step 3 had opened at 420 rpm from a stopped
+motor — and no stray 0 mV row at the boundary.
+
 Still open from this session:
 - **Full 3-minute baseline benchmark** never run (deferred: too noisy). The only
   benchmark row is a 7-second run, so its peak RPM is off a motor that had
   barely spun up.
 - **`session_data.raw_line` is still empty** on all 102 rows — the known issue
   in `docs/FEATURE_ROADMAP.md`, unchanged by this work.
-- **The app does not check device ACKs.** `sendProgram()` returns true on the
-  HTTP POST succeeding and ignores `STATUS:ERR`, and the runner fires
-  `SET_VOLTAGE` without confirming the clamped echo matches the step. This is
-  what made the Push & Run failure silent — worth closing before real motors go
-  through this in volume.
+- ~~**The app does not check device ACKs.**~~ **Fixed 2026-08-07.** `SET_PROG`
+  waits for `STATUS:OK:SET_PROG:n` and fails on `STATUS:ERR` or silence;
+  `START` waits for `STATUS:RUNNING` and aborts the run if it never arrives;
+  `SET_DIRECTION` takes the confirmed direction from its ACK; and `SET_VOLTAGE`
+  compares the **clamped** echo against the step, warning in a red status line
+  when they differ by more than 0.05V. Note real motors had been run through
+  the app throughout this period, so a clamped step would have been recorded at
+  its requested voltage with nothing flagging it.
+  ⚠ Only the happy path is hardware-verified (session 26: 1.0V and 1.5V steps
+  applied exactly, no warnings). The **clamp-detection branch is untested** —
+  to prove it, set `limit_volt` to 2.0V and run BASELINE; steps 3-5 should turn
+  the status line red.
 
 ### Phase 5 — Test matrix & release
 

@@ -1589,9 +1589,52 @@ function parseLine(line) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// DEVICE ACKNOWLEDGEMENTS
+// ═══════════════════════════════════════════════════════════════
+// Commands are fire-and-forget over HTTP: /api/serial/send reports only that
+// the bytes were written to the port, never what the device made of them. Every
+// command the device answers has a STATUS line, and until now nothing read
+// them — a rejected SET_PROG or a voltage clamped down to limit_volt passed
+// silently while a real motor kept turning. These let a caller wait for the
+// device's own answer before deciding the command worked.
+const pendingAcks = [];
+
+function waitForAck(test, timeoutMs = 2000) {
+  return new Promise(resolve => {
+    const entry = { test };
+    entry.settle = (line) => {
+      clearTimeout(entry.timer);
+      const i = pendingAcks.indexOf(entry);
+      if (i >= 0) pendingAcks.splice(i, 1);
+      resolve(line);
+    };
+    entry.timer = setTimeout(() => entry.settle(null), timeoutMs);
+    pendingAcks.push(entry);
+  });
+}
+
+// Called for every STATUS line; resolves whichever waiters match it.
+function resolveAcks(line) {
+  for (const entry of pendingAcks.slice()) {
+    let hit = false;
+    try { hit = entry.test(line); } catch(e) {}
+    if (hit) entry.settle(line);
+  }
+}
+
+// Send a command and wait for the device to answer it.
+// Resolves with the STATUS line, or null on send failure or timeout.
+async function sendCommandAck(cmd, test, timeoutMs = 2000) {
+  const ack = waitForAck(test, timeoutMs);   // registered before sending
+  if (!await sendCommand(cmd)) return null;
+  return await ack;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // STATUS MESSAGE HANDLER
 // ═══════════════════════════════════════════════════════════════
 function handleStatusMessage(line) {
+  resolveAcks(line);
   const payload = line.substring(7); // Remove 'STATUS:'
   console.log('[MBC2] STATUS:', payload);
 
@@ -2005,7 +2048,25 @@ async function sendProgram(progNo, prog) {
 
   const cmd = 'SET_PROG:' + progNo + ',' + values.join(',');
   console.log('[MBC2] Sending program', progNo, ':', cmd);
-  return await sendCommand(cmd);
+
+  // The device answers STATUS:OK:SET_PROG:n, or STATUS:ERR:* and changes
+  // nothing at all (SERIAL_SPEC 3-3: any range violation = no change). Writing
+  // this off as success is how a slot silently kept its old contents.
+  const ack = await sendCommandAck(
+    cmd,
+    l => l.startsWith('STATUS:OK:SET_PROG:') || l.startsWith('STATUS:ERR'),
+    3000
+  );
+
+  if (ack === null) {
+    showToast('No reply from device for program ' + progNo, true);
+    return false;
+  }
+  if (ack.startsWith('STATUS:ERR')) {
+    console.warn('[MBC2] SET_PROG rejected:', ack);
+    return false;   // handleStatusMessage already toasts the specific error
+  }
+  return true;
 }
 
 // ── PUSH & RUN ────────────────────────────────────────────────────────────────
@@ -2108,7 +2169,9 @@ async function startAppProgram() {
     remaining: 0,
     timer:     null,
     motorOn:   false,   // tracks whether START is still in effect
-    dir:       null     // direction currently applied to the device
+    dir:       null,    // direction the device confirmed
+    appliedVolts: null, // clamped value from the SET_VOLTAGE ACK
+    voltageWarning: null
   };
 
   showToast(`Running "${appRun.name}" — ${steps.length} step${steps.length > 1 ? 's' : ''}` +
@@ -2145,7 +2208,8 @@ const APP_RUN_CMD_GAP_MS = 120;
 
 async function appRunApplyStep(step) {
   if (!appRun) return;
-  const volts = appStepVolts(step).toFixed(1);
+  const wanted = appStepVolts(step);
+  const volts = wanted.toFixed(1);
   const dir = appStepDir(step);
   const gap = () => new Promise(r => setTimeout(r, APP_RUN_CMD_GAP_MS));
 
@@ -2160,17 +2224,51 @@ async function appRunApplyStep(step) {
     // device last held, which can be far higher than this step wants.
     await sendCommand('SET_VOLTAGE:' + volts);
     await gap();
-    await sendCommand('START');
+    const started = await sendCommandAck('START', l => l === 'STATUS:RUNNING' ||
+                                                       l.startsWith('STATUS:ERR'));
+    if (started === null || started.startsWith('STATUS:ERR')) {
+      // Without a running motor every later command is ignored anyway, and the
+      // step would quietly time out having done nothing.
+      showToast('Device did not start — program stopped', true);
+      await finishAppProgram(false);
+      return;
+    }
     appRun.motorOn = true;
     await gap();
-    await sendCommand('SET_DIRECTION:' + dir);
-    appRun.dir = dir;
+    const dirAck = await sendCommandAck('SET_DIRECTION:' + dir,
+      l => l.startsWith('STATUS:OK:SET_DIRECTION:') || l.startsWith('STATUS:ERR'));
+    if (dirAck && dirAck.startsWith('STATUS:OK:SET_DIRECTION:')) {
+      appRun.dir = dirAck.split(':').pop().trim();
+    } else {
+      showToast('Direction not confirmed by device', true);
+      appRun.dir = dir;
+    }
     await gap();
   }
 
-  // The ACK echoes the clamped applied value; the existing STATUS handler
-  // updates the confirmed reading from it, so the request is never assumed.
-  await sendCommand('SET_VOLTAGE:' + volts);
+  // The ACK echoes the CLAMPED applied value, which is what the motor actually
+  // sees. limit_volt can hold a step well below what the program asked for, and
+  // reporting the requested figure would put a wrong voltage in the session
+  // record and leave the break-in quietly incorrect.
+  const vAck = await sendCommandAck('SET_VOLTAGE:' + volts,
+    l => l.startsWith('STATUS:OK:SET_VOLTAGE:') || l.startsWith('STATUS:ERR'));
+
+  if (vAck === null || vAck.startsWith('STATUS:ERR')) {
+    appRun.voltageWarning = `step ${appRun.stepIndex + 1}: no voltage confirmation`;
+    showToast(`Step ${appRun.stepIndex + 1}: device did not confirm ${volts}V`, true);
+    return;
+  }
+
+  const applied = parseFloat(vAck.split(':').pop());
+  appRun.appliedVolts = isNaN(applied) ? null : applied;
+  if (!isNaN(applied) && Math.abs(applied - wanted) > 0.05) {
+    appRun.voltageWarning = `step ${appRun.stepIndex + 1}: asked ${volts}V, applied ${applied.toFixed(1)}V`;
+    console.warn('[MBC2] Voltage clamped:', appRun.voltageWarning);
+    showToast(`Step ${appRun.stepIndex + 1} clamped to ${applied.toFixed(1)}V ` +
+              `(asked ${volts}V) — check limit_volt`, true);
+  } else {
+    appRun.voltageWarning = null;
+  }
 }
 
 // Drive one phase of one step: 'run' powers the motor, 'cool' stops it.
@@ -2284,10 +2382,16 @@ function updateAppRunStatus() {
   }
   const left = Math.max(0, Math.round((appRun.endsAt - Date.now()) / 1000));
   const step = appRun.steps[appRun.stepIndex];
+  // Show the voltage the device confirmed, not the one requested — they differ
+  // whenever limit_volt clamps a step.
+  const shown = (appRun.appliedVolts !== null && appRun.appliedVolts !== undefined)
+    ? appRun.appliedVolts.toFixed(1) : appStepVolts(step).toFixed(1);
   el.textContent =
     `${appRun.paused ? 'PAUSED' : appRun.phase === 'cool' ? 'COOLING' : 'RUNNING'} · ` +
     `cycle ${appRun.cycle}/${appRun.cycles} · step ${appRun.stepIndex + 1}/${appRun.steps.length} · ` +
-    `${appStepVolts(step).toFixed(1)}V ${appStepDir(step)} · ${formatTime(left)} left`;
+    `${shown}V ${appStepDir(step)} · ${formatTime(left)} left`;
+  el.style.color = appRun.voltageWarning ? 'var(--danger)' : 'var(--text3)';
+  if (appRun.voltageWarning) el.textContent += ' · ⚠ ' + appRun.voltageWarning;
 }
 
 // Save all RAM changes to EEPROM (with warning)

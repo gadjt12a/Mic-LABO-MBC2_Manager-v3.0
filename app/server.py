@@ -233,8 +233,30 @@ def _close_dangling_connections():
 # ── Already-running and port-conflict checks ───────────────────────────────────
 APP_URL = f'http://127.0.0.1:{PORT}'
 
-def _already_running() -> bool:
-    """True if our app is already serving on PORT (responds to /api/ping)."""
+# How long to wait for a loopback connection before calling the port free.
+#
+# This machine does not refuse connections to a closed loopback port promptly:
+# a blocking connect_ex takes ~2.0s to return WSAECONNREFUSED, and the urllib
+# probe simply burned its whole timeout. Between them they spent ~3s of every
+# launch proving nothing was listening, against ~0.04s of actual startup work.
+#
+# A process that really is listening accepts on loopback immediately — the TCP
+# handshake completes in the kernel regardless of how busy the app is — so
+# anything slower than this is not a running instance.
+PROBE_TIMEOUT = 0.35
+
+def _port_in_use() -> bool:
+    """True if anything at all is listening on PORT."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(PROBE_TIMEOUT)
+        try:
+            return s.connect_ex(('127.0.0.1', PORT)) == 0
+        except OSError:
+            return False
+
+def _ping_ok() -> bool:
+    """True if whatever is on PORT answers our /api/ping."""
     import urllib.request
     try:
         with urllib.request.urlopen(f'{APP_URL}/api/ping', timeout=1) as r:
@@ -242,11 +264,19 @@ def _already_running() -> bool:
     except Exception:
         return False
 
-def _port_in_use() -> bool:
-    """True if anything at all is listening on PORT."""
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(('127.0.0.1', PORT)) == 0
+def _probe_port() -> str:
+    """One probe, three answers: 'free', 'ours', or 'foreign'.
+
+    Callers used to ask _already_running() and then _port_in_use(), paying the
+    full cost of both on the common path where the port is simply free.
+    """
+    if not _port_in_use():
+        return 'free'
+    return 'ours' if _ping_ok() else 'foreign'
+
+def _already_running() -> bool:
+    """True if our app is already serving on PORT (responds to /api/ping)."""
+    return _probe_port() == 'ours'
 
 def _foreign_port_error():
     """Friendly error when port is taken by a program that isn't our app."""
@@ -756,8 +786,11 @@ class MBC2Server(socketserver.ThreadingTCPServer):
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
+    # One probe covers both questions below.
+    port_state = _probe_port()
+
     # Already running? Open the existing instance and exit.
-    if _already_running():
+    if port_state == 'ours':
         print('[MBC2] Already running — opening in browser.')
         try:
             webbrowser.open(APP_URL)
@@ -767,7 +800,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # Port blocked by a foreign program?
-    if _port_in_use():
+    if port_state == 'foreign':
         _foreign_port_error()
 
     _prepare()

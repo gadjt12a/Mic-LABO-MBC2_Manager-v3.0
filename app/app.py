@@ -170,8 +170,12 @@ def main():
     _enable_dpi_awareness()
     win_w, win_h = _window_size()
 
+    # One probe decides all three cases; asking twice doubled the cost of the
+    # common path, where the port is simply free.
+    port_state = srv._probe_port()
+
     # If another MBC2 instance is already running, just open a window onto it.
-    if srv._already_running():
+    if port_state == 'ours':
         window = webview.create_window(
             f'MBC2 Dashboard v{srv.APP_VERSION}',
             f'http://127.0.0.1:{srv.PORT}',
@@ -183,7 +187,7 @@ def main():
         return
 
     # Port taken by something else entirely.
-    if srv._port_in_use():
+    if port_state == 'foreign':
         # Dismiss the splash first: it is normally closed by the window's
         # 'loaded' event, which never fires on the error paths, so it would sit
         # on screen beside the message box until the user clicked OK.

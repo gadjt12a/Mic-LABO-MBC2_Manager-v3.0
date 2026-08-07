@@ -116,6 +116,15 @@ the browser's Web Serial API.
   server before it could be served. The server now closes the record itself.
 - **Closing the window mid-recording discarded rows silently.** WebView2
   ignores `beforeunload`, so the page's own warning never appeared.
+- **Startup wasted ~3 seconds proving the port was free.** The already-running
+  and port-in-use checks each blocked on a connection to a closed loopback
+  port. This machine does not refuse those promptly — a blocking `connect_ex`
+  takes ~2.0s to return `WSAECONNREFUSED` and the urllib probe burned its full
+  1s timeout — so every launch paid ~3s against ~0.04s of real startup work.
+  Now a single probe with a short timeout answers all three cases (free, ours,
+  foreign); a real listener accepts in ~2ms, so nothing slower is a running
+  instance. Startup from source went 3.38s → 0.62s, and the packaged exe from
+  4.8s → 1.9s warm (the rest is PyInstaller unpacking ~21MB).
 
 ### Known gaps
 

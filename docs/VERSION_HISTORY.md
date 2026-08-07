@@ -1,6 +1,10 @@
 # MBC2 Dashboard — Version History
 
-## v4.0 (current)
+## v4.0.1 (current, unreleased)
+
+- **Faster startup** — the already-running and port-in-use checks each blocked on a connection to a closed loopback port, costing ~3s of every launch against ~0.04s of real work. A single short-timeout probe now answers all three cases. From source 3.38s → 0.62s; packaged exe 4.8s → 1.9s warm
+
+## v4.0 (tagged 2026-08-07)
 
 - **Serial moved into Python** — `SerialManager` (pyserial) owns the port and streams lines to the UI over SSE; the Windows app runs in a native pywebview window and needs no browser
 - **Break-in programs run from the app** — the app drives the device step by step over serial; device slots are for standalone running and for importing programs, not the run path

@@ -409,10 +409,13 @@ Still open from this session:
   when they differ by more than 0.05V. Note real motors had been run through
   the app throughout this period, so a clamped step would have been recorded at
   its requested voltage with nothing flagging it.
-  ⚠ Only the happy path is hardware-verified (session 26: 1.0V and 1.5V steps
-  applied exactly, no warnings). The **clamp-detection branch is untested** —
-  to prove it, set `limit_volt` to 2.0V and run BASELINE; steps 3-5 should turn
-  the status line red.
+  ✓ **Both branches hardware-verified 2026-08-07.** Happy path: session 26,
+  1.0V and 1.5V steps applied exactly, no false warnings. Clamp path:
+  `limit_volt` temporarily set to 30 (3.0V) over serial — RAM only, no `SAVE`,
+  restored to 50 straight after and read back to confirm — then DASH-C, whose
+  first step asks 3.5V, correctly raised the red toast and status-line warning.
+  Note `limit_volt`'s minimum is 30, so a clamp test needs a program step above
+  3.0V; BASELINE tops out at exactly 3.0V and will never trigger it.
 
 ### Phase 5 — Test matrix & release
 

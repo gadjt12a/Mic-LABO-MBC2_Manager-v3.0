@@ -372,6 +372,36 @@ Two findings, neither a v4 regression — both also present on `main`:
 2. **`session_data.raw_line` is stored empty.** Parsed columns are all correct,
    so nothing is lost analytically, but the original CSV line is not retained.
 
+### Phase 4.10 — Hardware validation of the app-driven runner (2026-08-07)
+
+The session that produced commit `a6a5e86`. Device on COM8, packaged exe, real
+data home. Verified against `session_data` for session 23, an app-driven
+BASELINE run stopped by hand during step 4:
+
+| Step | Voltage | Rows | RPM range |
+|---|---|---|---|
+| 1 | 1000 mV | 30 | 0 → 6,720 |
+| 2 | 1500 mV | 30 | 3,420 → 10,140 |
+| 3 | 2000 mV | 30 | 420 → 13,680 |
+| 4 | 2500 mV | 11 | 4,200 → 16,680 |
+
+Exactly 30 s per step at the right voltages, `mode=BASE` rather than `MANU`
+(the runner's label stamping), and step 4's 11 rows match the device's own
+`LOG:STEP` dump for the same stop. One stray 0 mV row at the step 3 boundary is
+the stop/restart artefact from before the `START`-per-step fix.
+
+Still open from this session:
+- **Full 3-minute baseline benchmark** never run (deferred: too noisy). The only
+  benchmark row is a 7-second run, so its peak RPM is off a motor that had
+  barely spun up.
+- **`session_data.raw_line` is still empty** on all 102 rows — the known issue
+  in `docs/FEATURE_ROADMAP.md`, unchanged by this work.
+- **The app does not check device ACKs.** `sendProgram()` returns true on the
+  HTTP POST succeeding and ignores `STATUS:ERR`, and the runner fires
+  `SET_VOLTAGE` without confirming the clamped echo matches the step. This is
+  what made the Push & Run failure silent — worth closing before real motors go
+  through this in volume.
+
 ### Phase 5 — Test matrix & release
 
 Merge to `main` has happened; `v4-packaging` is fully merged and dead. Still to
@@ -422,8 +452,13 @@ before the Push & Run commit.
 
 **Resolved 2026-08-07:** all three rebuilt from a clean clone of `main` at
 commit `cb3fe64` and verified against the `BUILD.md` checklist — see the build
-record there. This is the first artefact set to contain the manual-run
-recording, Push & Run, and both test-matrix fixes.
+record there.
+
+⚠ **Stale again as of `a6a5e86`.** The debugging session that produced the
+app-driven runner rebuilt `dist\MBC2Dashboard.exe` repeatedly from the working
+folder, so what is in `dist/` now is neither a clean-checkout build nor the
+current code. Rebuild all three from a clean clone of `main` before tagging
+`v4.0`.
 
 ---
 
@@ -439,7 +474,7 @@ recording, Push & Run, and both test-matrix fixes.
 | 6 | Port 8766 in use by foreign program | Friendly message box, no traceback, no window (`app.py:72`) | ✓ **PASSED** 2026-08-07 — against a squatter that accepts but never answers `/api/ping`: message box `MBC2 Dashboard` / "Port 8766 is already in use by another program…", single OK, no traceback, no webview window; OK exits everything with no orphan. A stray Tk splash window (Phase 5 defect 2) was found on the first run and fixed; the retest shows the message box as the only visible window. |
 | 7 | USB mode on a second machine | DB created/used on stick; sessions persist across machines | 🧑 KRIS |
 | 8 | Hardware: connect MBC2, record break-in on packaged exe | Rows land in DB (session chip row count), CSV export has data | ✓ **PASSED** 2026-08-06 |
-| 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | ◑ partial — program sync (`GET_PROG`) passed; benchmark + Read All Settings still 🧑 KRIS |
+| 9 | Hardware: benchmark flow + Read All Settings + program slot read | Benchmark saved; settings grid loads; slot display renders | ◑ **mostly passed** 2026-08-07 — Read All Settings ✓ (grid populated); program slot read ✓ (all 50 slots via ⟳ ALL, 11 hold programs); benchmark **now reachable for the first time** and wrote `benchmark_id=1`, but only a 7-second run. A full 3-minute baseline is still 🧑 KRIS (deferred — too noisy on the day). |
 | 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | ◑ partial — `GET /api/shutdown` verified 2026-08-07 (returned 200, port released, both processes gone within ~7 s; the bootloader parent outlives the child by ~5 s). The button itself in the UI is still 🧑 KRIS. ⚠ An orphaned `MBC2Dashboard.exe` **was** observed twice, both times when Restart Manager was simultaneously trying to close the app during an install — see Phase 5 defect 1. |
 | 11 | **Window** close mid-recording (packaged exe) | Connection record closed with `end_reason=tab_closed`. ⚠ **Expected to fail** — `app.py:89` calls `os._exit(0)` on window close, which may kill the process before the `pagehide` beacon is served. Verify; if it fails, close the connection server-side on shutdown instead. | 🧑 KRIS |
 | 11b | Tab close mid-recording (source/Mac, browser) | beforeunload warning; connection record closed (`end_reason=tab_closed`) | scripted |

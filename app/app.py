@@ -35,6 +35,49 @@ def _dismiss_splash():
             pass
 
 
+_window = None
+
+
+def _on_window_closing():
+    """Ask before discarding an in-progress recording.
+
+    The page's own beforeunload warning does nothing under WebView2 — closing
+    the window mid-recording silently threw away every unsaved row. Only asks
+    when there is something to lose: an armed recording with no rows yet is not
+    worth a dialog.
+
+    Returning False cancels the close. Anything unexpected here must let the
+    window close, or a bug in this handler would trap the user in the app.
+    """
+    try:
+        state = srv.get_recording_state()
+        if not state.get('active') or state.get('rows', 0) < 1:
+            return True
+        rows = state['rows']
+        return bool(_window.create_confirmation_dialog(
+            'Recording in progress',
+            f'{rows} recorded row{"s" if rows != 1 else ""} have not been saved '
+            f'to the database yet.\n\nClose anyway and lose them?'))
+    except Exception as exc:
+        print(f'[MBC2] close confirmation failed ({exc}); closing anyway')
+        return True
+
+
+def _on_window_closed():
+    """Close the open connection record, then exit.
+
+    os._exit(0) on its own kills this process — server included — before the
+    page's pagehide beacon can be served, so the connections row stayed open
+    forever. The server runs in this same process, so it can close the row
+    directly here; nothing has to survive the shutdown.
+    """
+    try:
+        srv.close_open_connection('window_closed')
+    except Exception:
+        pass    # never block the exit on bookkeeping
+    os._exit(0)
+
+
 def _enable_dpi_awareness():
     """Tell Windows we handle scaling ourselves.
 
@@ -161,8 +204,11 @@ def main():
         f'http://127.0.0.1:{srv.PORT}',
         width=win_w, height=win_h, min_size=(900, 600),
     )
+    global _window
+    _window = window
     window.events.loaded += _dismiss_splash
-    window.events.closed += lambda: os._exit(0)
+    window.events.closing += _on_window_closing
+    window.events.closed += _on_window_closed
     webview.start()
 
 

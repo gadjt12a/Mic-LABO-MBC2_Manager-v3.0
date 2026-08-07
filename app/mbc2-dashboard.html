@@ -2839,6 +2839,7 @@ function parseCSVTelemetry(line) {
       if (window._manuFrames >= 5) {
         window._manuFrames = 0;
         recording = false;
+        stopRecordingStateReports();
         document.getElementById('btnRecord').disabled = !serialConnected;
         document.getElementById('btnStop').disabled = true;
         document.getElementById('runIndicator').style.display = 'none';
@@ -3143,6 +3144,7 @@ function startRecording() {
   document.getElementById('runIndicator').style.display = 'inline';
   document.getElementById('sessionCount').textContent = 'Waiting...';
   setStatus('running', 'Recording');
+  startRecordingStateReports();
 
   // Link to motor DB
   sessionMotorId = activeMotorId;
@@ -3167,9 +3169,37 @@ function startRecording() {
   }
 }
 
+// Tell the server what is being recorded, so the packaged app can ask before
+// the window closes on unsaved rows. WebView2 ignores beforeunload, so the page
+// cannot warn about this itself.
+let recordingStateTimer = null;
+
+function reportRecordingState() {
+  const payload = { active: !!recording, rows: sessionData.length };
+  try {
+    fetch('/api/recording/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  } catch(e) {}
+}
+
+function startRecordingStateReports() {
+  reportRecordingState();
+  if (recordingStateTimer) clearInterval(recordingStateTimer);
+  recordingStateTimer = setInterval(reportRecordingState, 5000);
+}
+
+function stopRecordingStateReports() {
+  if (recordingStateTimer) { clearInterval(recordingStateTimer); recordingStateTimer = null; }
+  reportRecordingState();
+}
+
 function stopRecording() {
   recording = false;
   manualRun = false;
+  stopRecordingStateReports();
   document.getElementById('btnRecord').disabled = !serialConnected;
   document.getElementById('btnStop').disabled = true;
   document.getElementById('runIndicator').style.display = 'none';

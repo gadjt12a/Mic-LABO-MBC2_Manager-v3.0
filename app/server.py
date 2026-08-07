@@ -149,6 +149,87 @@ def _backup_db():
     except Exception as e:
         logging.warning(f'[MBC2] Daily backup failed: {e}')
 
+# ── Connection-record lifecycle ────────────────────────────────────────────────
+# The frontend opens a connections row and is supposed to close it from its
+# pagehide handler with a sendBeacon. In the packaged app that never works:
+# closing the window calls os._exit(0), which kills this process — and the HTTP
+# server with it — before the beacon can be served. Verified 2026-08-07: not one
+# connection in the database had ever been closed with 'tab_closed'.
+#
+# So the server keeps its own note of the open row and closes it on the way out.
+# That does not depend on the page getting a chance to say anything.
+_open_connection_id = None
+_open_connection_lock = threading.Lock()
+
+
+def _track_open_connection(connection_id):
+    global _open_connection_id
+    with _open_connection_lock:
+        _open_connection_id = connection_id
+
+
+def _forget_open_connection(connection_id=None):
+    global _open_connection_id
+    with _open_connection_lock:
+        if connection_id is None or _open_connection_id == connection_id:
+            _open_connection_id = None
+
+
+def close_open_connection(reason: str = 'app_closed'):
+    """Close the connection row this run opened, if it is still open."""
+    global _open_connection_id
+    with _open_connection_lock:
+        cid = _open_connection_id
+        _open_connection_id = None
+    if cid is None:
+        return
+    try:
+        db.close_connection(cid, reason)
+        logging.info(f'[MBC2] Closed connection {cid} ({reason})')
+    except Exception as e:
+        logging.warning(f'[MBC2] Could not close connection {cid}: {e}')
+
+
+# What the page is currently recording, so the window-close handler can ask
+# before throwing away rows that were never saved. Reported by the frontend;
+# the server never infers it.
+_recording_state = {'active': False, 'rows': 0}
+
+
+def set_recording_state(active: bool, rows: int = 0):
+    with _open_connection_lock:
+        _recording_state['active'] = bool(active)
+        _recording_state['rows'] = int(rows or 0)
+
+
+def get_recording_state() -> dict:
+    with _open_connection_lock:
+        return dict(_recording_state)
+
+
+def _close_dangling_connections():
+    """Close rows left open by a previous run that died without saying so.
+
+    Their ended_at is unknown, so it is recorded as the last moment we can
+    evidence rather than guessed: nothing here invents a duration.
+    """
+    try:
+        with db.get_connection() as conn:
+            db._ensure_connections_table(conn)
+            cur = conn.execute("""
+                UPDATE connections
+                SET ended_at = COALESCE(ended_at, started_at),
+                    end_reason = 'unknown'
+                WHERE ended_at IS NULL
+            """)
+            conn.commit()
+            if cur.rowcount:
+                logging.info(f'[MBC2] Closed {cur.rowcount} dangling connection '
+                             f'record(s) from previous runs')
+    except Exception as e:
+        logging.warning(f'[MBC2] Dangling connection cleanup failed: {e}')
+
+
 # ── Already-running and port-conflict checks ───────────────────────────────────
 APP_URL = f'http://127.0.0.1:{PORT}'
 
@@ -187,6 +268,7 @@ def _prepare():
     _migrate_legacy_db()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     db.init_db()
+    _close_dangling_connections()
     _backup_db()
     try:
         if not db.get_all_profiles() and SEED_JSON.exists():
@@ -339,6 +421,7 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
         if path == '/api/connections/open':
             try:
                 connection_id = db.open_connection()
+                _track_open_connection(connection_id)
                 self._json({'ok': True, 'connection_id': connection_id})
             except Exception as e:
                 self._json({'error': str(e)}, 500)
@@ -441,6 +524,7 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
         if path == '/api/shutdown':
             self._json({'ok': True, 'message': 'Server shutting down'})
             logging.info('[MBC2] Shutdown requested.')
+            close_open_connection('app_closed')
             def _do_exit():
                 time.sleep(0.2)
                 os._exit(0)
@@ -525,6 +609,16 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
             return
 
         # ── Connection close ─────────────────────────────────────────────────
+        if path == '/api/recording/state':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length)) if length else {}
+                set_recording_state(body.get('active'), body.get('rows'))
+                self._json({'ok': True})
+            except Exception as e:
+                self._json({'error': str(e)}, 500)
+            return
+
         if path == '/api/connections/close':
             try:
                 length = int(self.headers.get('Content-Length', 0))
@@ -533,6 +627,7 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
                 end_reason = body.get('end_reason', 'normal')
                 if connection_id:
                     db.close_connection(connection_id, end_reason)
+                    _forget_open_connection(connection_id)
                 self._json({'ok': True})
             except Exception as e:
                 self._json({'error': str(e)}, 500)

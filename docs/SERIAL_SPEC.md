@@ -340,20 +340,47 @@ Both groups are preceded by `1` — a flag of some kind, not the direction;
 direction is positional (normal first, then reverse), and is corroborated by
 CSV `col12` reading 1 during pass 1 and 2 during pass 2.
 
-**`ACCEL_LOAD` is only partly decoded.** For the same run:
+**`ACCEL_LOAD`**, mostly decoded by running the same test at two voltages:
 
 ```
-ACCEL_LOAD,1,19080,749,1441,5660,15713,831,8970,2190
-             │     └ ? └ ?  └ ?   │     └ ? │    └ ?
-             No-load RPM ✓        Low ✓     High ✓
+ACCEL_LOAD,<pass>,<No_rpm>,<No_mA>,<R_mohm?>,<?>,<Lo_rpm>,<Lo_mA>,<Hi_rpm>,<Hi_mA>
+
+3.0V  ACCEL_LOAD,1,19080,749,1441,5660,15713,831,8970,2190
+4.0V  ACCEL_LOAD,1,24060,743,1527,8071,21090,829,15125,2114
 ```
 
-The three RPM values are certain (they match `ACCEL_DONE`). The others are not:
-749/831/2190 rising with load look like currents in mA, and 19080 ÷ 5660 =
-3.371 V is a plausible terminal voltage implying 5660 is kV — but neither is
-confirmed, and the results screen photographed did not show per-load voltage and
-current.
+| Field | 3.0V (p1/p2) | 4.0V (p1/p2) | Reading |
+|---|---|---|---|
+| No RPM | 19080 / 18980 | 24060 / 24540 | rises with voltage ✓ |
+| No mA | 749 / 754 | 743 / 788 | **constant** |
+| f5 | 1441 / 1451 | 1527 / 1496 | near-constant — resistance in mΩ, probable |
+| f6 | 5660 / 5656 | 8071 / 7436 | **unexplained** |
+| Lo RPM | 15713 / 15634 | 21090 / 21247 | rises ✓ |
+| Lo mA | 831 / 820 | 829 / 837 | **constant** |
+| Hi RPM | 8970 / 8918 | 15125 / 14645 | rises ✓ |
+| Hi mA | 2190 / 2174 | 2114 / 2150 | **constant** |
+
+**The load levels are defined by current, not voltage.** Raising the test
+voltage by a third left all three current figures unchanged (~750 / ~830 /
+~2150 mA) while every RPM rose. Currents do not stay fixed under a voltage
+increase unless they are the quantity being held fixed — so AccelTest reports
+**the RPM the motor achieves at three fixed current draws**. This is what makes
+the numbers comparable between motors: same electrical input, different
+mechanical output.
+
+**f6 was wrongly guessed as kV in an earlier revision of this file.** It is not:
+kV is a motor constant and would not move, but f6 went 5660 → 8071, and the two
+passes at 4.0V disagree by 8% where every other field agrees within 2%. Left
+undocumented rather than assigned a plausible-sounding meaning.
 
 `ACCEL_STALL` fields beyond `<pass>,<n>` are undecoded. Firmware also contains a
-`STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` header that this run
-never emitted — presumably a separate test.
+`STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` header that neither
+run emitted — presumably a separate test we have not triggered.
+
+### No way to start these tests over serial
+
+The firmware contains no command to begin an AccelTest — the strings include
+`ACCEL_ABORT` but nothing resembling `START_ACCEL`. The test is started from the
+device's own menus, and the app can only listen. Anything built on this data has
+to be **passive capture**: the user runs the test on the device, the app notices
+the `ACCEL_*` lines and records them.

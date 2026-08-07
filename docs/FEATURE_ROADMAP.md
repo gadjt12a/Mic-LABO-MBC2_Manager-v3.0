@@ -247,6 +247,62 @@ has an OTA version picker.
 
 ---
 
+## Phase 9 — Capture AccelTest results (proposed)
+
+Verified on hardware 2026-08-08. AccelTest reports **the RPM a motor reaches at
+three fixed current draws** (~750 / ~830 / ~2150 mA), per direction, in about 90
+seconds per pass. Because the loads are fixed *currents*, results are directly
+comparable between motors in a way peak RPM never was: same electrical input,
+different mechanical output. See the appendix in `docs/SERIAL_SPEC.md`.
+
+Why this is worth building: the app currently ranks motors on free-running RPM,
+which is the number least related to how a car actually accelerates. A loaded
+figure is closer to what wins races, and it costs 3 minutes per motor.
+
+**Constraint that shapes the design: the app cannot start an AccelTest.** No
+serial command exists for it; the test is started on the device. So every step
+below is passive — the app watches for `ACCEL_*` lines and records what arrives.
+
+### 9.1 Capture and store
+
+- [ ] Recognise `ACCEL_CK` / `ACCEL_STALL` / `ACCEL_LOAD` / `ACCEL_DONE` in
+      `parseLine()`. They are not CSV and must not reach the telemetry parser.
+- [ ] New `accel_tests` table: motor_id, connection_id, started_at, test_voltage
+      (from CSV `col11` during the run), per direction the three RPMs and three
+      currents, plus the undecoded fields.
+- [ ] **Store the raw lines verbatim** alongside the parsed values. The format is
+      undocumented and partly undecoded — without the raw text a later insight
+      cannot be applied retrospectively. (`session_data.raw_line` is empty for
+      every row ever recorded; do not repeat that.)
+- [ ] Attribute to the active motor, and warn — do not silently discard — if no
+      motor is selected when a test completes.
+
+### 9.2 Show it
+
+- [ ] A result panel: No / Lo / Hi RPM per direction, with the test voltage.
+- [ ] On the motor record, the history of its AccelTests.
+
+### 9.3 Use it
+
+- [ ] Compare motors at the same load rather than on peak RPM.
+- [ ] Pre/post break-in comparison: does break-in improve *loaded* RPM more than
+      free RPM? This is answerable once a few motors have before/after tests, and
+      is the first question this data makes askable.
+
+### Open questions
+
+- `f6` in `ACCEL_LOAD` — rises with voltage, inconsistent between passes, not kV.
+- `ACCEL_STALL` payload — five samples per pass, fields undecoded.
+- `STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` exists in firmware
+  but neither run produced it. Find what triggers it; per-pulse data would be
+  richer still.
+- Whether the current targets are fixed constants or vary by motor/voltage —
+  two runs is not enough to be sure they are literally constant.
+
+Ask Michihiro only what the data cannot answer, and only after more runs.
+
+---
+
 ## Deferred / future
 
 These are out of scope until the above phases are stable:

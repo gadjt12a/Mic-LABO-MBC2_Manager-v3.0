@@ -1,6 +1,18 @@
-# MBC2 Dashboard v4.0 — Release Notes
+# MBC2 Dashboard v4 — Release Notes
 
-*DRAFT — complete after hardware test matrix passes*
+*v4.0 tagged 2026-08-07. Still a draft: USB mode has not been tried on a second
+machine, the Mac package is untested on a real Mac, and no full 3-minute
+baseline benchmark has been recorded.*
+
+---
+
+## 4.0.1
+
+**It starts faster.** The app used to spend about three seconds on every launch
+checking whether a copy was already running — time it spent waiting on a check
+that could never answer any quicker. Now it opens in about two seconds.
+
+Nothing else changed, and nothing you do is different.
 
 ---
 

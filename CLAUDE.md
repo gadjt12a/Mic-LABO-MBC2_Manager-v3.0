@@ -29,10 +29,13 @@ The MBC2 is an ESP32-WROOM-32 based device that drives motors through break-in p
 
 ---
 
-## Current version: v4.0 (branch: `v4-packaging`)
+## Current version: 4.0.1 (all work on `main`)
 
-v4 packaging is complete on the `v4-packaging` branch (pending hardware test
-matrix and merge to `main`). See [`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md).
+`v4.0` was tagged 2026-08-07; `main` has since moved to 4.0.1. The
+`v4-packaging` branch is fully merged and dead — **do not look for work there**.
+Version comes from `app/VERSION` alone: it drives `/api/info`, the footer, and
+every artefact filename, so bump it there and nowhere else. See
+[`DEPLOYMENT_PLAN.md`](DEPLOYMENT_PLAN.md) for test-matrix and release status.
 
 **Serial is server-side; the packaged app is a native window.** Phase 4.5
 (commit `fa9cc1f`) moved serial out of the browser and into Python. The old
@@ -98,6 +101,19 @@ Key architectural facts:
 - **Two entry points, and they must stay in sync.** `app/app.py` (packaged, native window) and `app/server.py` (source/Mac, browser). Startup logic — port-conflict handling, `_prepare()`, shutdown — lives in `server.py` so both paths share it. Don't fork that logic into `app.py`.
 - **Serial baud rate is 115200.** Do not change this.
 - **The CH340 driver required is v3.9.2024.9** (ARM64). Newer versions dropped ARM64 support. Do not reference or suggest driver upgrades.
+- **`API` in the frontend must stay relative (`''`).** It was
+  `http://localhost:8766` while the page is served from `127.0.0.1:8766` — a
+  different origin, so every call took a CORS preflight and `navigator.sendBeacon`
+  (which cannot preflight) was silently dropped, meaning connection records were
+  never closed on tab close. Making it absolute again re-breaks that.
+- **`PROBE_TIMEOUT` (0.35 s) is deliberately short.** On this machine a
+  connection to a *closed* loopback port takes ~2 s to be refused, so long
+  timeouts cost ~3 s of every launch. A real listener accepts in ~2 ms, so the
+  short timeout cannot produce a false "port free". Raising it undoes the fix.
+- **Unload warnings must not rely on `beforeunload`.** WebView2 ignores it
+  entirely, so the packaged app got no prompt and silently discarded unsaved
+  rows. The close confirmation is a native pywebview dialog driven by recording
+  state the frontend POSTs to `/api/recording/state`.
 
 ### Database / schema migrations
 

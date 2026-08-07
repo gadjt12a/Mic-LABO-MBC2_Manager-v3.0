@@ -1,7 +1,9 @@
 # MBC2 Dashboard — v4 Packaging & Deployment Plan
 
-*Created: 2026-07-20 · Branch: `v4-packaging` · Status: Phases 1–4.7 complete —
-artefacts rebuilt 2026-08-06; Phase 5 test matrix is all that remains*
+*Created: 2026-07-20 · All work now on `main` · Status: `v4.0` tagged
+2026-08-07, `main` at 4.0.1. Test matrix rows 1–6, 8, 10, 11, 11b passed;
+rows 7, 9 (benchmark half), 12 and 13 outstanding. GitHub release not yet
+created.*
 
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
@@ -419,9 +421,15 @@ Still open from this session:
 
 ### Phase 5 — Test matrix & release
 
-Merge to `main` has happened; `v4-packaging` is fully merged and dead. Still to
-do: fix the two defects below, rebuild artefacts, tag `v4.0`, GitHub release
-with all three artefacts attached.
+Merge to `main` has happened; `v4-packaging` is fully merged and dead.
+**`v4.0` was tagged 2026-08-07** at commit `95097f7`, with Kris's explicit
+decision to tag while rows 7, 9, 12 and 13 were still outstanding — the gaps
+are named in the tag message.
+
+Still to do: **the GitHub release itself.** Tagging publishes nothing, and
+`dist/` is gitignored, so no one can download anything yet. Note `dist/` now
+holds **4.0.1** artefacts; a v4.0 release would need its artefacts rebuilt from
+the tag.
 
 **Scripted rows run 2026-08-07** (rows 2, 3, 4-prune, 5, 6, and the row 10 HTTP
 path). Four passed; row 3 failed in one of its two paths. Two defects found —

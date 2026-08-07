@@ -13,6 +13,11 @@ __pycache__/
 build/
 dist/
 
+# Reference material dropped in for a session — screenshots, photos, exports.
+# Local only: never committed, so anything can be put here without thinking
+# about repo size or what it might contain.
+knowledgebase/
+
 # IDE
 .vscode/
 .idea/

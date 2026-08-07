@@ -7,7 +7,11 @@
 
 > **v0.200(Beta) is not covered by this document, or by any published spec.**
 > It adds serial commands and data streams that do not exist in v0.110 — see
-> `docs/FEATURE_ROADMAP.md`. Nothing here has been re-verified against v0.200.
+> the appendix at the end of this file, and `docs/FEATURE_ROADMAP.md`.
+>
+> Verified against v0.200 on 2026-08-08: the **periodic CSV stream is
+> unchanged** — still 20 columns in the same order. Settings, programs and the
+> `STATUS:`/`PROG:`/`SETTING:`/`LOG:` vocabulary are also unchanged.
 
 ---
 
@@ -290,3 +294,66 @@ Non-linear encoding. GET_PROG/SET_PROG uses the index value, not seconds.
 - Lines starting with `SETTING:` → settings data response
 - Lines starting with `LOG:` → summary log data
 - All other non-empty lines during a run → CSV telemetry data
+
+---
+
+## Appendix — v0.200(Beta) additions (unofficial)
+
+**Not from mic-LABO.** Observed on hardware 2026-08-08. The v0.200 user guide
+states AccelTest has no USB export; it emits the following anyway. Treat as
+provisional.
+
+### New commands (verified working)
+
+| Command | Response |
+|---|---|
+| `GET_CALIB` | `CALIB:norm_volt:n` `CALIB:rev_volt:n` `CALIB:current:n` `CALIB:temp:n` |
+| `SET_CALIB:…` | `STATUS:OK:SET_CALIB:…` — **arguments and units unknown; do not send** |
+| `GET_WIFI` | `WIFI:STATUS:…` (e.g. `DISCONNECTED`), and `WIFI:IP:` / `WIFI:RSSI:` when connected |
+| `SET_WIFI:…` | `STATUS:OK:WIFI_CONNECTING` — argument format unknown |
+
+Calibration read from one device: `norm_volt:10000`, `rev_volt:10000`,
+`current:9300`, `temp:0`. Apparently ×10000 scale factors (1.0000, 1.0000,
+0.9300) with a temperature offset, but that reading is inferred.
+
+### AccelTest output
+
+AccelTest measures load characteristics — predicted RPM at no-load, low-load and
+high-load — by varying voltage automatically. One pass per direction; a two-pass
+run took 173 s. Emitted during a run:
+
+```
+ACCEL_CK,<pass>,…                     once per pass, before the stall sweep
+ACCEL_STALL,<pass>,<n>,…              five per pass, n = 0..4, ~14 s apart
+ACCEL_LOAD,<pass>,<No>,…,<Lo>,…,<Hi>,…   once per pass
+ACCEL_DONE,…                          once, at the end
+```
+
+**`ACCEL_DONE` is confirmed** against the device's own results screen:
+
+```
+ACCEL_DONE,1,19080,15713,8970,1,18980,15634,8918
+             └ normal: No,Lo,Hi ┘   └ reverse: No,Lo,Hi ┘
+```
+
+Both groups are preceded by `1` — a flag of some kind, not the direction;
+direction is positional (normal first, then reverse), and is corroborated by
+CSV `col12` reading 1 during pass 1 and 2 during pass 2.
+
+**`ACCEL_LOAD` is only partly decoded.** For the same run:
+
+```
+ACCEL_LOAD,1,19080,749,1441,5660,15713,831,8970,2190
+             │     └ ? └ ?  └ ?   │     └ ? │    └ ?
+             No-load RPM ✓        Low ✓     High ✓
+```
+
+The three RPM values are certain (they match `ACCEL_DONE`). The others are not:
+749/831/2190 rising with load look like currents in mA, and 19080 ÷ 5660 =
+3.371 V is a plausible terminal voltage implying 5660 is kV — but neither is
+confirmed, and the results screen photographed did not show per-load voltage and
+current.
+
+`ACCEL_STALL` fields beyond `<pass>,<n>` are undecoded. Firmware also contains a
+`STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` header that this run
+never emitted — presumably a separate test.

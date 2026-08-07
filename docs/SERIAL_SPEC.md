@@ -2,7 +2,12 @@
 
 **Target firmware:** MBC2 v0.110+  
 **MCU:** ESP32-WROOM-32  
-**Source:** mic-LABO official spec (Michihiro Nakagawa), published 2026-06-30
+**Source:** mic-LABO official spec (Michihiro Nakagawa), published 2026-06-30 —
+[MBC2_serial_interface_spec.html](https://mic-labo.com/mbc2_manual/MBC2_serial_interface_spec.html)
+
+> **v0.200(Beta) is not covered by this document, or by any published spec.**
+> It adds serial commands and data streams that do not exist in v0.110 — see
+> `docs/FEATURE_ROADMAP.md`. Nothing here has been re-verified against v0.200.
 
 ---
 
@@ -37,6 +42,14 @@ Emitted approximately once per second while a program is running (`sendLog()`). 
 | 6 | `run_state` | int | See run_state table below |
 | 7 | `current_rpm` | int | Current RPM — **actual RPM value** (internal × 10). No further multiplication needed |
 | 8 | `max_rpm` | int | Max RPM — actual RPM value (internal × 10) |
+
+> **Do not divide col07/col08 by 10.** The official spec phrases these as
+> "actual value × 10", which reads like the transmitted number needs dividing.
+> It does not — the firmware has already done the multiplication, and the value
+> on the wire is real RPM. Proof from a captured line:
+> `…,0,19320,19680,6450,2995,3000,…` → 19320 ÷ 2.995 V = **6450**, exactly the
+> kV the device reports in col09. Were the RPM 1,932 the kV would be 645.
+> Getting this wrong silently divides every RPM and kV in the database by ten.
 | 9 | `kv` | int | KV value (rpm/V). 0 when voltage is 0 |
 | 10 | `voltage_mv` | int | Current voltage in mV. 1000 = 1.000V |
 | 11 | `set_voltage_mv` | int | Set voltage in mV (run_setvolt × 100) |

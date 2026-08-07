@@ -204,6 +204,49 @@ Five defects found by hardware, none visible without it:
 
 ---
 
+## Firmware v0.200(Beta) — evaluated 2026-08-08, not yet installed
+
+Compared the v0.110 and v0.200 images from `esp32.miclabo.xyz` by extracting
+and diffing their strings. **There is no published spec for v0.200** — the
+mic-LABO document covers v0.110 only, the manual directory has no other file,
+and nothing exists publicly. Everything below is inferred from token names, not
+from documentation or observed behaviour.
+
+New in v0.200, absent from v0.110 (verified by byte count, 0 vs n occurrences):
+
+| Area | Tokens |
+|---|---|
+| Accel test | `ACCEL_META,` `ACCEL_LOAD,` `ACCEL_CP,` `ACCEL_DONE,` `ACCEL_STALL,` `ACCEL_CK,` / `ACCEL_CK,FAIL` `ACCEL_ABORT` / `ACCEL_ABORT,NORPM` `ACCEL_SPIN2,STOPPED` |
+| Stall test | `STALL_HEAD,duty,volt_mv,current_ma,pulses,i_early,i_late` then rows, `STALL_STOP,{ERR\|CURRENT\|ROTATED\|IDROP,n}`, `STALL_END` |
+| Calibration | `GET_CALIB` / `SET_CALIB` → `CALIB:norm_volt:` `CALIB:rev_volt:` `CALIB:current:` `CALIB:temp:`, ACK `STATUS:OK:SET_CALIB:` |
+| WiFi | `GET_WIFI` / `SET_WIFI:` → `WIFI:STATUS:` `WIFI:IP:` `WIFI:RSSI:`, `STATUS:OK:WIFI_CONNECTING` |
+
+Device menus gain `AccelTest`, `Motor Test`, `Retry Accel Test?`. `BattEmulate`
+already existed in v0.110.
+
+The stall block is the interesting one: per-pulse duty, voltage, current and
+early/late current samples is a far richer motor signature than the periodic
+CSV, and nothing in v0.110 can produce it.
+
+**Compatibility:** every v0.110 protocol token is still present in v0.200 —
+same 10 setting keys, same `STATUS:`/`PROG:`/`LOG:` vocabulary, no removals. The
+app should keep working unchanged.
+
+**Unknown and unknowable from strings:** whether the periodic CSV columns
+changed. Those are numeric and leave no strings, and every parsed field in the
+database depends on them.
+
+When the update is done:
+- [ ] Capture raw serial and confirm the CSV is still 20 columns in the same order **before** trusting any session recorded on v0.200.
+- [ ] Capture a full AccelTest and stall run raw, and derive the format from the data.
+- [ ] `GET_CALIB` and record the values. **Do not send `SET_CALIB`** until its units are known — writing calibration blind corrupts every measurement the device makes.
+- [ ] Only then ask Michihiro, with specific questions the data could not answer.
+
+Rollback is available: `versions.csv` still lists v0.103–v0.110 and the device
+has an OTA version picker.
+
+---
+
 ## Deferred / future
 
 These are out of scope until the above phases are stable:

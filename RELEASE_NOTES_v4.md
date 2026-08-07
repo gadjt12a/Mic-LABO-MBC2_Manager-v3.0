@@ -24,19 +24,34 @@ Two things follow from this:
 Running from source (and the Mac package) still opens in a browser — but any
 modern browser now works, not just Chrome.
 
-### Run your own programs on the device
+### Run your own programs
 
-Programs you build in the app used to be for reference only — the MBC2 can
-only run what is in one of its own 50 slots, so selecting one of your programs
+Programs you build in the app used to be for reference only — selecting one
 and pressing start just ran the motor manually.
 
-**Push & Run** fixes that: pick one of your programs, pick a slot, and the app
-writes it to the device and starts it. The write goes to the device's **memory
-only — SAVE is never sent** — so whatever was stored in that slot comes back
-after a power cycle, and no EEPROM write cycles are used.
+Now the app runs them. Pick a program under **In this app**, press **START
+PROG**, and the app takes the MBC2 through each step for you: direction,
+voltage, how long to run, how long to cool, repeated for the number of cycles
+you set. **STOP**, **PAUSE** and **NEXT** control the run, and the panel shows
+which cycle and step you are on with the time remaining.
 
-The two program lists now sit together under **Break-in Program**, labelled
-"In this app" and "On the device", so it is obvious which is which.
+Nothing is written to the device to make this work. The device's own 50 slots
+are still there for when you want to run the MBC2 on the bench **without the
+laptop** — Settings → Program Sync will read all 50 slots at once, save one
+into your library (handy if you copy someone's program at a race meet), or
+write one of yours into a slot. Writing a slot changes the device's **memory
+only — SAVE is never sent** — so whatever was stored there comes back after a
+power cycle, and no EEPROM write cycles are used.
+
+### It tells you when the device disagrees
+
+The app used to send a command and assume it worked. Now it reads the device's
+reply. If your voltage limit holds a step below what the program asked for,
+you get a warning saying what was asked for and what was actually applied,
+instead of a break-in quietly running at the wrong voltage.
+
+Closing the window while recording now asks first — but only if there is
+something to lose.
 
 ### Manual runs are recorded
 
@@ -101,13 +116,18 @@ folder). Your data is **not lost** — copy your old `mbc2.db` into
 
 ## Known issues / SmartScreen
 
-The exe is not code-signed (cost deferred). Windows will show:
+The exe is not code-signed (cost deferred), so Windows may show:
 
 > Windows protected your PC
 
 Click **More info** → **Run anyway**.
 
-*TODO: add SmartScreen screenshot here before publishing.*
+Whether it appears depends on how the installer reached the machine, not on
+the machine itself. Browsers and email clients tag downloaded files with a
+"mark of the web", and that tag is what SmartScreen reacts to. So a download
+from the GitHub release page will usually trigger it, while the same installer
+copied from a USB stick or a network share typically will not — confirmed on
+2026-08-07, when a USB-copied install produced no warning at all.
 
 ---
 

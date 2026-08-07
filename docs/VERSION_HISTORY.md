@@ -2,6 +2,11 @@
 
 ## v4.0 (current)
 
+- **Serial moved into Python** — `SerialManager` (pyserial) owns the port and streams lines to the UI over SSE; the Windows app runs in a native pywebview window and needs no browser
+- **Break-in programs run from the app** — the app drives the device step by step over serial; device slots are for standalone running and for importing programs, not the run path
+- **Device replies checked** — a rejected program write, a failed start, or a voltage clamped by `limit_volt` is reported instead of passing silently
+- **Read All Slots / Save to Library** — read all 50 device slots in one action (empty ones hidden); save one into the app's program library
+- **Exit safety** — connection records closed when the app exits; closing mid-recording asks before discarding unsaved rows
 - **Windows installer** — single-file `MBC2Dashboard.exe` (PyInstaller) + Inno Setup installer; per-user install, no admin rights required
 - **USB / portable zip** — exe + launcher bats; `Start MBC2 (USB).bat` stores data on the stick via `MBC2_DATA_DIR`
 - **Mac package** — source zip with launcher `.command` (UNTESTED disclaimer)

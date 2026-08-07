@@ -78,9 +78,9 @@ and run `python3 app/app.py` (Windows/Mac desktop only).
 
 - **Live monitoring** — real-time RPM, Amps, kV efficiency, temperature charts
 - **Device control** — START / STOP / PAUSE / RESUME / NEXT STEP / voltage / current limit / direction
-- **Program sync** — read and write device program slots (GET_PROG / SET_PROG)
+- **Break-in programs run from the app** — pick one of your programs and press START PROG; the app drives the device through each step (direction, voltage, run time, cool period) for the set number of cycles
 - **Program library** — create, edit and store break-in profiles; import/export JSON
-- **Push & Run** — send a program from the library to a device slot and start it in one step (RAM only; the device's saved programs are never overwritten)
+- **Program sync** — read all 50 device slots in one action, save one into your library, or write a program to a slot so the MBC2 can run standalone without the laptop (RAM only; the device's saved programs are never overwritten)
 - **Motor registry** — register motors, track break-in history, compare sessions
 - **Benchmark mode** — automated voltage ramp with per-step kV results and efficiency rating
 - **Crash log** — silence watchdog captures full motor state on unexpected data gaps

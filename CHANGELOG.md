@@ -26,13 +26,25 @@ the browser's Web Serial API.
   moved) into the new data home, leaving `DATA-HAS-MOVED.txt` behind.
 - `app/VERSION` as the single source of truth, served via `GET /api/info`.
 - `requirements.txt` (pyserial).
-- **Push & Run** — write a program from the app's own library into a device
-  slot and start it in one action. Previously an app-built program could not
-  be run at all: only programs already stored on the device could be started.
-  The write is **RAM-only — `SAVE` is never sent** — so the slot's stored
-  program returns after a power cycle. The confirmation names the slot and
-  what currently occupies it. Slots are validated 1–50, so program 0 (MANU)
-  can never be overwritten.
+- **Run break-in programs from the app.** Selecting a program under "In this
+  app" and pressing START PROG makes the app drive the device step by step
+  over serial — direction, voltage, run time, cool period, repeated for the
+  cycle count — with STOP, PAUSE and NEXT acting on that run. Nothing is
+  written to the device. Programs stored in the device's own slots remain
+  runnable directly (`START_PROG:n`) as an alternative.
+- **Read All Slots** (⟳ ALL) reads all 50 device slots in one action; empty
+  slots are hidden from the run list. There is no `GET_PROG:ALL` on the
+  device, so this walks the slots.
+- **Save to Library** turns a program read off a device into a stored app
+  program — for a program built standalone, or copied from someone else's
+  device.
+- **Device replies are checked.** A rejected program write, a device that
+  fails to start, or a voltage clamped by `limit_volt` is now reported rather
+  than passing silently. A clamped step raises a warning showing what was
+  asked for and what was applied.
+- **Unsaved rows are protected on exit.** Closing the window mid-recording
+  asks first, and only when there are actually rows to lose. Connection
+  records are closed when the app exits rather than left open.
 
 ### Changed
 
@@ -43,10 +55,20 @@ the browser's Web Serial API.
   longer required — from source, any modern browser works.
 - **Program controls unified.** The app's own programs and the device's slot
   programs now sit in one `Break-in Program` section, labelled "In this app"
-  and "On the device", so it is clear which list can actually start a run.
-  `PAUSE` and `NEXT` moved there from Device Control, since they act on a
-  running program; Device Control keeps the manual-run controls (START/STOP,
-  voltage, current limit, direction).
+  and "On the device". `PAUSE` and `NEXT` moved there from Device Control,
+  since they act on a running program; Device Control keeps the manual-run
+  controls (START/STOP, voltage, current limit, direction).
+- **Device slots are for standalone use, not for running programs.** Writing
+  a program into a slot lives in Settings → Program Sync, and exists so the
+  MBC2 can be run on the bench without the laptop, or so a program can be
+  imported. It is still **RAM-only — `SAVE` is never sent** — and slots are
+  validated 1–50 so program 0 (MANU) can never be overwritten.
+- **Baseline 3.0V** is a single 3-minute 3.0V step in R, and runs like any
+  other program. It was previously two 2-minute steps either side of a cool
+  period, the first of which ran in F.
+- All API calls are same-origin. They previously targeted
+  `http://localhost:8766` while the page is served from `127.0.0.1:8766`,
+  which forced a CORS preflight on every request.
 - **Manual motor runs are recorded.** Pressing START auto-starts a session,
   but every row was discarded while the device reported `MANU` — the recorder
   was waiting for a named program to begin, so manual runs always saved an
@@ -73,6 +95,34 @@ the browser's Web Serial API.
   reflow. `app/app.py` now sets per-monitor-v2 DPI awareness before creating
   the window, and clamps the window to the desktop work area so it cannot
   open taller than the screen.
+- **App-library programs had no steps.** `/api/profiles` returned program
+  metadata without the step list, so every program in the library loaded with
+  an empty `steps` array — anything that converted a library program produced
+  one with no voltages or timings.
+- **Selecting a program in the dropdown selected nothing.** The dropdown wrote
+  string ids while the library holds numbers, and every lookup uses strict
+  equality. The program name, target RPM and the remembered program across
+  restarts were all affected.
+- **Baseline 3.0V vanished from the program dropdown.** Two functions built
+  the same `<select>` and the one without the Baseline entry overwrote the one
+  with it, which made benchmark mode unreachable — no benchmark had ever been
+  recorded.
+- **Programs restarted the motor at every step.** `START` was sent per step,
+  so the motor stopped and spun back up at each boundary and the device's own
+  log was reset, leaving `LOG:` describing only the final step.
+- **Connection records were never closed on exit.** The page closed them from
+  a `pagehide` beacon, which could not work: the beacon went to a different
+  origin and was dropped, and in the packaged app `os._exit(0)` killed the
+  server before it could be served. The server now closes the record itself.
+- **Closing the window mid-recording discarded rows silently.** WebView2
+  ignores `beforeunload`, so the page's own warning never appeared.
+
+### Known gaps
+
+- USB/portable mode has not been exercised on a second machine.
+- The Mac package is untested on real hardware.
+- No full 3-minute baseline benchmark has been recorded.
+- SmartScreen click-through screenshots are not yet captured.
 
 ---
 

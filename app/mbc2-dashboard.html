@@ -1161,7 +1161,12 @@ let prevVolts = 0;
 // ═══════════════════════════════════════════════════════════════
 // SERVER API
 // ═══════════════════════════════════════════════════════════════
-const API = 'http://localhost:8766';
+// Relative, so every call is same-origin whichever host the page was opened on.
+// This used to be the absolute 'http://localhost:8766' while the app is served
+// from 127.0.0.1:8766 — a different origin to the browser, which forced a CORS
+// preflight on every request and made navigator.sendBeacon (which cannot
+// preflight) fail silently.
+const API = '';
 
 async function apiGet(path) {
   try { const r = await fetch(API + path); return r.ok ? await r.json() : null; }
@@ -6149,11 +6154,14 @@ window.addEventListener('beforeunload', (e) => {
 
 // Best-effort close of the DB connection record when the tab goes away
 window.addEventListener('pagehide', () => {
-  if (connectionDbId) {
-    navigator.sendBeacon(API + '/api/connections/close',
-      new Blob([JSON.stringify({ connection_id: connectionDbId, end_reason: 'tab_closed' })],
-               { type: 'application/json' }));
-  }
+  if (!connectionDbId) return;
+  // text/plain is CORS-safelisted, so no preflight is needed — sendBeacon
+  // cannot preflight, and an application/json blob was silently never sent.
+  // The server parses the body as JSON regardless of the declared type.
+  const ok = navigator.sendBeacon('/api/connections/close',
+    new Blob([JSON.stringify({ connection_id: connectionDbId, end_reason: 'tab_closed' })],
+             { type: 'text/plain' }));
+  if (!ok) console.warn('[MBC2] connection-close beacon was not queued');
 });
 
 window.addEventListener('load', () => {

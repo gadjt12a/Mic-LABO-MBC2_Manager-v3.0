@@ -475,6 +475,28 @@
 .mr-compare-btn:hover { border-color:var(--accent); color:var(--accent); }
 .mr-compare-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(0,229,255,0.08); }
 
+/* ── ACCELTEST RESULTS ──────────────────────────────────────── */
+.at-card { background:var(--bg3); border:1px solid var(--border2); border-radius:3px; padding:10px 12px; margin-bottom:8px; }
+.at-hdr { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.at-motor { font-family:var(--mono); font-size:13px; font-weight:700; color:var(--accent); letter-spacing:0.06em; }
+.at-motor.unattributed { color:var(--accent2); }
+.at-volts { font-family:var(--mono); font-size:11px; color:var(--text2); }
+.at-date { color:var(--text3); font-size:11px; margin-left:auto; }
+.at-pass { border-top:1px solid var(--border); padding-top:6px; margin-top:6px; }
+.at-pass-lbl { font-family:var(--display); font-size:9px; letter-spacing:2px; color:var(--text3); margin-bottom:4px; }
+.at-loads { display:flex; gap:14px; flex-wrap:wrap; }
+.at-load { min-width:96px; }
+.at-load-name { font-size:9px; letter-spacing:1px; color:var(--text3); text-transform:uppercase; }
+.at-load-rpm { font-family:var(--mono); font-size:15px; color:var(--text); }
+.at-load-ma { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.at-ret { margin-left:auto; text-align:right; }
+.at-ret-val { font-family:var(--mono); font-size:20px; font-weight:700; line-height:1; }
+.at-ret-lbl { font-size:9px; letter-spacing:1px; color:var(--text3); text-transform:uppercase; }
+.at-good { color:var(--accent3); }
+.at-mid  { color:var(--accent2); }
+.at-poor { color:var(--danger); }
+.at-attach { font-size:10px; font-family:var(--mono); background:var(--bg2); color:var(--text2); border:1px solid var(--border2); border-radius:2px; padding:2px 4px; }
+
 /* ── RIGHT PANEL — ACTIVE MOTOR SECTION ─────────────────────── */
 .active-motor-section { margin-bottom:8px; }
 .active-motor-id { font-family:var(--mono); font-size:14px; font-weight:700; color:var(--accent); letter-spacing:0.06em; margin-top:4px; }
@@ -1679,7 +1701,10 @@ async function saveAccelTest() {
     return;
   }
   const best = run.passes.reduce((a, p) => Math.max(a, p.hi_rpm || 0), 0);
-  showToast(`AccelTest saved — ${run.passes.length} pass(es), best high-load ${best} rpm`);
+  showToast(`AccelTest saved — ${run.passes.length} pass(es), best high-load ${best} rpm. See Motors → AccelTest.`);
+  // Refresh the results list if the user is already looking at it.
+  if (MR && MR.activeTab === 'accel') mrLoadAccelTests();
+  if (MR && MR._detailMotorId && MR._detailMotorId === run.motorId) mrShowMotorDetail(run.motorId);
   if (typeof refreshAll === 'function') refreshAll();
 }
 
@@ -4930,13 +4955,16 @@ function mrRenderRegistry() {
 function mrSwitchTab(tab) {
   MR.activeTab = tab;
   document.querySelectorAll('.mr-tab').forEach((el, i) => {
-    el.classList.toggle('active', ['register','registry'][i] === tab);
+    el.classList.toggle('active', ['register','registry','accel'][i] === tab);
   });
   document.getElementById('mrPanelRegister').style.display = tab === 'register' ? 'block' : 'none';
   document.getElementById('mrPanelRegistry').style.display = tab === 'registry' ? 'block' : 'none';
+  const accelPanel = document.getElementById('mrPanelAccel');
+  if (accelPanel) accelPanel.style.display = tab === 'accel' ? 'block' : 'none';
   // Always close detail panel when switching tabs
   mrCloseDetail();
   if (tab === 'registry') mrLoadMotors();
+  if (tab === 'accel')    mrLoadAccelTests();
 }
 
 // ── Build DOM and init ────────────────────────────────────────
@@ -4961,6 +4989,7 @@ function initMotorRegistry() {
     <div class="mr-tab-row">
       <div class="mr-tab active" onclick="mrSwitchTab('register')">Register motor</div>
       <div class="mr-tab" onclick="mrSwitchTab('registry')">Motor registry</div>
+      <div class="mr-tab" onclick="mrSwitchTab('accel')">AccelTest</div>
     </div>
 
     <div id="mrBanner" class="mr-banner" style="display:none"></div>
@@ -5025,6 +5054,16 @@ function initMotorRegistry() {
     <div id="mrPanelRegistry" style="display:none">
       <div id="mrRegList"><p class="mr-empty">Loading...</p></div>
     </div>
+
+    <div id="mrPanelAccel" style="display:none">
+      <p class="mr-sec-lbl" style="margin-top:0">AccelTest results</p>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">
+        AccelTest is started on the device itself — the app records whatever it sees.
+        Select the motor in Device Control <em>before</em> starting the test and it will
+        be attributed automatically; otherwise attach it here afterwards.
+      </div>
+      <div id="mrAccelList"><p class="mr-empty">Loading...</p></div>
+    </div>
   `;
 
   // Section toggle state
@@ -5034,6 +5073,121 @@ function initMotorRegistry() {
   mrRenderSubprogs();
   mrRenderSeq();
   mrUpdatePreview();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ACCELTEST RESULTS (Phase 9.2)
+// ═══════════════════════════════════════════════════════════════
+// The headline figure is load retention — high-load RPM as a percentage of
+// no-load RPM. Peak RPM alone cannot separate motors: a Torque-Tuned 2 and a
+// box stock ran within 2% of each other unloaded, then 63% apart under load.
+//
+// The measured current is shown beside every RPM on purpose. The device
+// derives the three load levels per motor, so "no-load" is not the same
+// current on two different motors and the RPMs are only comparable once you
+// can see that. Two motors tested at different voltages are not comparable at
+// all, which is why the test voltage sits in the header.
+
+function atRetention(p) {
+  if (!p.no_rpm || !p.hi_rpm) return null;
+  return Math.round(100 * p.hi_rpm / p.no_rpm);
+}
+
+function atRetClass(pct) {
+  if (pct === null) return '';
+  if (pct >= 75) return 'at-good';
+  if (pct >= 55) return 'at-mid';
+  return 'at-poor';
+}
+
+function atNum(v)  { return (v || v === 0) ? Number(v).toLocaleString() : '—'; }
+function atDirName(d) { return d === 'R' ? 'Reverse' : d === 'N' ? 'Normal' : (d || '?'); }
+
+function atLoadCell(name, rpm, ma) {
+  return `<div class="at-load">
+    <div class="at-load-name">${name}</div>
+    <div class="at-load-rpm">${atNum(rpm)}</div>
+    <div class="at-load-ma">${atNum(ma)} mA</div>
+  </div>`;
+}
+
+function atPassHtml(p) {
+  const pct = atRetention(p);
+  return `<div class="at-pass">
+    <div class="at-pass-lbl">PASS ${p.pass_no} · ${atDirName(p.direction)}</div>
+    <div class="at-loads">
+      ${atLoadCell('No load',   p.no_rpm, p.no_ma)}
+      ${atLoadCell('Low load',  p.lo_rpm, p.lo_ma)}
+      ${atLoadCell('High load', p.hi_rpm, p.hi_ma)}
+      <div class="at-ret">
+        <div class="at-ret-val ${atRetClass(pct)}">${pct === null ? '—' : pct + '%'}</div>
+        <div class="at-ret-lbl">retained</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// showAttach is off inside a motor's own detail panel — the motor is already
+// known there, so the only useful control is delete.
+function atTestCard(t, showAttach) {
+  const volts = t.test_voltage_mv ? (t.test_voltage_mv / 1000).toFixed(1) + 'V' : 'voltage unknown';
+  const named = !!t.motor_identifier;
+  let attach = '';
+  if (showAttach) {
+    const opts = MR.motors.map(m =>
+      `<option value="${m.motor_id}"${m.motor_id === t.motor_id ? ' selected' : ''}>${m.identifier}</option>`).join('');
+    attach = `<select class="at-attach" onchange="mrAttachAccel(${t.accel_test_id}, this.value)">
+        <option value="">— attach to motor —</option>${opts}
+      </select>`;
+  }
+  return `<div class="at-card">
+    <div class="at-hdr">
+      <span class="at-motor ${named ? '' : 'unattributed'}">${named ? t.motor_identifier : 'UNATTRIBUTED'}</span>
+      <span class="at-volts">${volts}</span>
+      ${attach}
+      <span class="at-date">${(t.recorded_at || '').slice(0, 16).replace('T', ' ')}</span>
+      <button class="mr-compare-btn" style="border-color:var(--danger);color:var(--danger);"
+              onclick="mrDeleteAccel(${t.accel_test_id})">✕</button>
+    </div>
+    ${(t.passes || []).map(atPassHtml).join('')}
+  </div>`;
+}
+
+async function mrLoadAccelTests() {
+  const el = document.getElementById('mrAccelList');
+  if (!el) return;
+  // The attach dropdown needs the motor list; the AccelTest tab can be opened
+  // without ever visiting the registry.
+  if (!MR.motors || !MR.motors.length) await mrLoadMotors();
+  const data = await apiGet('/api/accel');
+  const tests = data ? (data.tests || []) : [];
+  el.innerHTML = tests.length
+    ? tests.map(t => atTestCard(t, true)).join('')
+    : '<p class="mr-empty">No AccelTests recorded yet. Run one from the device menu while connected.</p>';
+}
+
+async function mrAttachAccel(testId, motorIdRaw) {
+  const motorId = motorIdRaw ? parseInt(motorIdRaw, 10) : null;
+  const res = await apiPost(`/api/accel/${testId}/motor`, { motor_id: motorId });
+  if (!res || !res.success) {
+    showToast('Could not attach AccelTest', true);
+    return;
+  }
+  showToast(motorId ? 'AccelTest attached' : 'AccelTest detached');
+  mrLoadAccelTests();
+}
+
+async function mrDeleteAccel(testId) {
+  if (!(await appConfirm('Delete this AccelTest result?', { danger: true, okLabel: 'Delete' }))) return;
+  const res = await apiDelete('/api/accel/' + testId);
+  if (!res || !res.success) {
+    showToast('Could not delete AccelTest', true);
+    return;
+  }
+  showToast('AccelTest deleted');
+  mrLoadAccelTests();
+  // The motor detail panel may be showing the same test.
+  if (MR._detailMotorId) mrShowMotorDetail(MR._detailMotorId);
 }
 
 function mrToggleSection(key) {
@@ -5216,10 +5370,14 @@ async function mrShowMotorDetail(motorId) {
   if (!detailEl) return;
 
   detailEl.style.display = 'block';
+  MR._detailMotorId = motorId;   // so a deleted AccelTest can refresh this panel
 
   // Fetch sessions for this motor from DB
   const data = await apiGet('/api/motors/' + motor.identifier + '/sessions');
   const sessions = data ? (data.sessions || []) : [];
+
+  const accelData  = await apiGet('/api/accel?motor_id=' + motorId);
+  const accelTests = accelData ? (accelData.tests || []) : [];
 
   let sessHtml = '';
   if (!sessions.length) {
@@ -5251,12 +5409,17 @@ async function mrShowMotorDetail(motorId) {
       </div>
       <div style="font-family:var(--display);font-size:9px;letter-spacing:2px;color:var(--text3);margin-bottom:6px;">SESSIONS</div>
       ${sessHtml}
+      <div style="font-family:var(--display);font-size:9px;letter-spacing:2px;color:var(--text3);margin:14px 0 6px;">ACCELTEST</div>
+      ${accelTests.length
+        ? accelTests.map(t => atTestCard(t, false)).join('')
+        : '<div class="mr-empty" style="padding:8px 0">No AccelTests for this motor yet.</div>'}
     </div>`;
 }
 
 function mrCloseDetail() {
   const el = document.getElementById('mrMotorDetail');
   if (el) el.style.display = 'none';
+  MR._detailMotorId = null;
 }
 
 async function mrDeleteMotor(motorId, identifier) {

@@ -288,24 +288,38 @@ box stock 47-70%, TT2 79-85%. Worth showing per motor per voltage.
 serial command exists for it; the test is started on the device. So every step
 below is passive — the app watches for `ACCEL_*` lines and records what arrives.
 
-### 9.1 Capture and store
+### 9.1 Capture and store — **done** (`c4f2a41`, `cd428d8`)
 
-- [ ] Recognise `ACCEL_CK` / `ACCEL_STALL` / `ACCEL_LOAD` / `ACCEL_DONE` in
+- [x] Recognise `ACCEL_CK` / `ACCEL_STALL` / `ACCEL_LOAD` / `ACCEL_DONE` in
       `parseLine()`. They are not CSV and must not reach the telemetry parser.
-- [ ] New `accel_tests` table: motor_id, connection_id, started_at, test_voltage
-      (from CSV `col11` during the run), per direction the three RPMs and three
-      currents, plus the undecoded fields.
-- [ ] **Store the raw lines verbatim** alongside the parsed values. The format is
+- [x] New `accel_tests` table: motor_id, connection_id, started_at, test_voltage,
+      per direction the three RPMs and three currents, plus the undecoded fields.
+      Split into `accel_tests` + `accel_test_passes` because one test runs 1–10
+      passes.
+- [x] **Store the raw lines verbatim** alongside the parsed values. The format is
       undocumented and partly undecoded — without the raw text a later insight
       cannot be applied retrospectively. (`session_data.raw_line` is empty for
       every row ever recorded; do not repeat that.)
-- [ ] Attribute to the active motor, and warn — do not silently discard — if no
+- [x] Attribute to the active motor, and warn — do not silently discard — if no
       motor is selected when a test completes.
 
-### 9.2 Show it
+Test voltage came out wrong on the first real run (1500 mV recorded for a 3.0V
+test). `col11` reads 0 while the device drives its own load ramp, so it must be
+sampled continuously from *before* the test starts, not from the first `ACCEL_`
+line onward — `lastSetVoltageMv` in the CSV parser.
 
-- [ ] A result panel: No / Lo / Hi RPM per direction, with the test voltage.
-- [ ] On the motor record, the history of its AccelTests.
+### 9.2 Show it — **done**
+
+- [x] A result panel: No / Lo / Hi RPM per direction, with the test voltage and
+      the measured current beside every RPM. Motors → AccelTest tab.
+- [x] On the motor record, the history of its AccelTests.
+- [x] Attach an unattributed test to a motor after the fact, and delete a test.
+      Needed because 9.1 deliberately saves tests with no motor selected.
+
+Load retention is shown per pass here rather than waiting for 9.3 — it is one
+division and it is the only figure that makes two cards comparable at a glance.
+Colour thresholds (≥75% good, ≥55% mid) come from the six real runs: box stock
+46–70%, Torque-Tuned 2 79–85%.
 
 ### 9.3 Use it
 

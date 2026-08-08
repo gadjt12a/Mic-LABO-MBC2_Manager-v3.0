@@ -153,6 +153,54 @@ Saved break-in programs (local DB copy — separate from device EEPROM).
 
 > **Never seed `programs` with Christchurch club protocols (PMPE, SPRF).** These are private club knowledge distributed separately as `christchurch_protocol.json`.
 
+### `accel_tests`
+
+One completed AccelTest (firmware v0.200+). The test is started **on the device** —
+there is no serial command for it — so these rows are written from whatever
+`ACCEL_*` lines arrive.
+
+| Column | Type | Notes |
+|---|---|---|
+| `accel_test_id` | INTEGER PK | Auto-increment |
+| `recorded_at` | TEXT | `datetime('now')` default |
+| `motor_id` | INTEGER FK → `motors` | **Nullable** — a test with no motor selected is saved unattributed, not discarded |
+| `motor_identifier` | TEXT | Denormalised copy, for display when the motor is deleted |
+| `connection_id` | INTEGER FK → `connections` | |
+| `test_voltage_mv` | INTEGER | From CSV `col11`, sampled from *before* the test starts — `col11` reads 0 while the device drives the load ramp |
+| `pass_count` | INTEGER | |
+| `firmware` | TEXT | |
+| `raw_lines` | TEXT | Every `ACCEL_*` line verbatim, newline-joined |
+| `notes` | TEXT | |
+
+### `accel_test_passes`
+
+One row per pass. A test runs 1–10 passes (device setting), and "both directions"
+produces one pass each way.
+
+| Column | Type | Notes |
+|---|---|---|
+| `accel_pass_id` | INTEGER PK | Auto-increment |
+| `accel_test_id` | INTEGER FK → `accel_tests` | |
+| `pass_no` | INTEGER | |
+| `direction` | TEXT | `N` or `R` |
+| `no_rpm` / `no_ma` | INTEGER | No-load level |
+| `lo_rpm` / `lo_ma` | INTEGER | Low-load level |
+| `hi_rpm` / `hi_ma` | INTEGER | High-load level |
+| `field5` | INTEGER | Undecoded — probably winding resistance in mΩ |
+| `field6` | INTEGER | Undecoded. Rises with voltage, inconsistent between passes, not kV |
+| `raw_line` | TEXT | The `ACCEL_LOAD` line verbatim |
+
+> **The currents are not optional.** The device derives the three load levels
+> *per motor*, so "no load" is a different current on different motors — a
+> Torque-Tuned 2 drew 313 mA where a box stock drew 749 mA. Without `*_ma`,
+> two motors measured at very different loads both read as "no-load" and the
+> RPMs look comparable when they are not.
+
+> Field names mirror what the device sends rather than what we think it means,
+> and `raw_line`/`raw_lines` are stored so a later decode can be applied to
+> tests already recorded. `session_data.raw_line` has been empty for every row
+> ever written — that is the mistake being avoided here.
+
 ---
 
 ## Migration helper pattern

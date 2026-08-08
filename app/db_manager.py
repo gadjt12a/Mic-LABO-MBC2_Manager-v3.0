@@ -886,6 +886,42 @@ def get_accel_tests(motor_id: int = None, limit: int = 50) -> list:
         return result
 
 
+def attach_accel_motor(test_id: int, motor_id: int) -> bool:
+    """Point an existing AccelTest at a motor.
+
+    A test run with no motor selected is saved unattributed rather than
+    discarded, so there has to be a way to claim it afterwards. Passing a
+    motor_id of None detaches it again.
+    """
+    with get_connection() as conn:
+        _ensure_accel_tables(conn)
+        identifier = None
+        if motor_id:
+            row = conn.execute(
+                "SELECT identifier FROM motors WHERE motor_id = ?",
+                (motor_id,)).fetchone()
+            if not row:
+                return False
+            identifier = row['identifier']
+        conn.execute(
+            "UPDATE accel_tests SET motor_id = ?, motor_identifier = ? "
+            "WHERE accel_test_id = ?", (motor_id or None, identifier, test_id))
+        conn.commit()
+        return True
+
+
+def delete_accel_test(test_id: int) -> bool:
+    """Delete one AccelTest and its passes."""
+    with get_connection() as conn:
+        _ensure_accel_tables(conn)
+        conn.execute("DELETE FROM accel_test_passes WHERE accel_test_id = ?",
+                     (test_id,))
+        cur = conn.execute("DELETE FROM accel_tests WHERE accel_test_id = ?",
+                           (test_id,))
+        conn.commit()
+        return cur.rowcount > 0
+
+
 def open_connection() -> int:
     """Record a new serial connection opening. Returns connection_id."""
     with get_connection() as conn:

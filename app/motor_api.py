@@ -90,6 +90,33 @@ def handle_motor_api(handler):
             _send_error(handler, f'Could not read AccelTests: {e}', 500)
         return
 
+    # ── POST /api/accel/<id>/motor ───────────────────────────────
+    # Claim an unattributed test after the fact.
+    if method == 'POST' and path.startswith('/api/accel/') and path.endswith('/motor'):
+        try:
+            test_id = int(path.split('/')[3])
+            body = _read_body(handler)
+            ok = db.attach_accel_motor(test_id, body.get('motor_id'))
+            if ok:
+                _send_json(handler, {'success': True})
+            else:
+                _send_error(handler, 'No such motor', 404)
+        except Exception as e:
+            _send_error(handler, f'Could not attach AccelTest: {e}', 500)
+        return
+
+    # ── DELETE /api/accel/<id> ───────────────────────────────────
+    if method == 'DELETE' and path.startswith('/api/accel/'):
+        try:
+            test_id = int(path.split('/')[3])
+            if db.delete_accel_test(test_id):
+                _send_json(handler, {'success': True})
+            else:
+                _send_error(handler, 'No such AccelTest', 404)
+        except Exception as e:
+            _send_error(handler, f'Could not delete AccelTest: {e}', 500)
+        return
+
     # ── GET /api/motors ─────────────────────────────────────────
     if method == 'GET' and path == '/api/motors':
         motors = db.list_motors(status='Active')

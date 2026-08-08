@@ -6,6 +6,22 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ## [4.0.1] — unreleased
 
+### Added
+
+- **AccelTest results are captured and displayed** (firmware v0.200+). AccelTest
+  measures the RPM a motor holds at three fixed current draws; it is started on
+  the device, so the app watches for `ACCEL_*` lines and records what arrives.
+  Results appear under Motors → AccelTest and on each motor's own record, showing
+  No / Low / High load RPM per direction with the current measured at each, the
+  test voltage, and **load retention** (high-load ÷ no-load) as the headline
+  figure. The raw serial lines are stored verbatim alongside the parsed values so
+  a later decode can be applied to tests already recorded.
+- A test run with no motor selected is saved unattributed rather than discarded,
+  and can be attached to a motor afterwards from the AccelTest tab.
+- New API routes: `POST /api/accel/save`, `GET /api/accel[?motor_id=n]`,
+  `POST /api/accel/<id>/motor`, `DELETE /api/accel/<id>`.
+- New tables `accel_tests` and `accel_test_passes`, auto-created on launch.
+
 ### Fixed
 
 - **Startup wasted ~3 seconds proving the port was free.** The already-running

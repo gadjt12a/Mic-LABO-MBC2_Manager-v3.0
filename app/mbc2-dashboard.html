@@ -1583,6 +1583,13 @@ function updateConfirmedCurrentLimit(a) {
 // so the measured currents are stored with the RPMs — see docs/SERIAL_SPEC.md.
 let accelRun = null;
 
+// Last non-zero set voltage (col11) seen in telemetry. Tracked continuously,
+// because by the time the first ACCEL_ line arrives the device is already
+// driving the load ramp itself and col11 reads 0 or a low ramp value — the
+// test voltage is only visible during the free-running phases, which start
+// before the first ACCEL_ line.
+let lastSetVoltageMv = 0;
+
 function accelReset() {
   accelRun = null;
 }
@@ -1596,7 +1603,7 @@ function handleAccelMessage(line) {
       startedAt: Date.now(),
       raw: [],
       passes: [],
-      voltageMv: null,
+      voltageMv: lastSetVoltageMv || null,   // seeded from before the test began
       motorId: activeMotorId || null,
       motorIdentifier: null,
       connectionId: connectionDbId || null
@@ -1610,12 +1617,9 @@ function handleAccelMessage(line) {
 
   accelRun.raw.push(line);
 
-  // The device never reports the test voltage, so take it from the telemetry:
-  // state.volts is col11 (set_voltage_mv). It reads 0 while the device is
-  // driving the load ramp itself and shows the test voltage during the
-  // free-running phases, so keep the highest value seen rather than the latest.
-  const mv = Math.round((state.volts || 0) * 1000);
-  if (mv > (accelRun.voltageMv || 0)) accelRun.voltageMv = mv;
+  // Keep the highest set voltage seen, in case the free-running phase during
+  // the test reports a higher figure than the one captured before it started.
+  if (lastSetVoltageMv > (accelRun.voltageMv || 0)) accelRun.voltageMv = lastSetVoltageMv;
 
   if (tag === 'ACCEL_LOAD') {
     // ACCEL_LOAD,<pass>,<No_rpm>,<No_mA>,<f5>,<f6>,<Lo_rpm>,<Lo_mA>,<Hi_rpm>,<Hi_mA>
@@ -2891,6 +2895,7 @@ function parseCSVTelemetry(line) {
   // parts[9] = kv
   // parts[10] = voltage_mv
   const rawDuty  = parseInt(parts[11]) || 0; // set_voltage_mv
+  if (rawDuty > 0) lastSetVoltageMv = rawDuty;   // for AccelTest attribution
   const dirCode  = parseInt(parts[12]) || 0;
   state.amps     = (parseInt(parts[13]) || 0) / 1000; // col[13] = current_ma
   state.counter  = parseInt(parts[14]) || 0; // elapsed_sec

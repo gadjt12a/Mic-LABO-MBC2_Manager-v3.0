@@ -1295,6 +1295,7 @@ async function disconnectSerial() {
 
   recording = false;
   stopSilenceWatchdog();
+  accelReset();   // drop any half-captured AccelTest rather than carry it over
 
   if (eventSource) { try { eventSource.close(); } catch(e) {} eventSource = null; }
   serialConnected = false;
@@ -1565,6 +1566,120 @@ function updateConfirmedCurrentLimit(a) {
 
 
 // ═══════════════════════════════════════════════════════════════
+// ACCELTEST CAPTURE (firmware v0.200+)
+// ═══════════════════════════════════════════════════════════════
+// AccelTest reports the RPM a motor reaches at three fixed current draws. It is
+// started on the device — there is no serial command for it — so all the app
+// can do is notice the ACCEL_* lines and record them.
+//
+// Sequence per run:
+//   ACCEL_CK,<pass>,…            once per pass, before the stall sweep
+//   ACCEL_STALL,<pass>,<n>,…     five per pass
+//   ACCEL_LOAD,<pass>,…          the result for that pass
+//   ACCEL_DONE,…                 end of the whole test
+//
+// The load currents are derived per motor by the device and differ widely
+// between motors (749 mA vs 313 mA at the "no-load" level on two we measured),
+// so the measured currents are stored with the RPMs — see docs/SERIAL_SPEC.md.
+let accelRun = null;
+
+function accelReset() {
+  accelRun = null;
+}
+
+function handleAccelMessage(line) {
+  const parts = line.split(',');
+  const tag = parts[0];
+
+  if (!accelRun) {
+    accelRun = {
+      startedAt: Date.now(),
+      raw: [],
+      passes: [],
+      voltageMv: null,
+      motorId: activeMotorId || null,
+      motorIdentifier: null,
+      connectionId: connectionDbId || null
+    };
+    try {
+      const el = document.getElementById('activeMotorSelect');
+      if (el && el.value) accelRun.motorIdentifier = el.options[el.selectedIndex]?.text || null;
+    } catch(e) {}
+    showToast('AccelTest detected — capturing');
+  }
+
+  accelRun.raw.push(line);
+
+  // The device never reports the test voltage, so take it from the telemetry:
+  // state.volts is col11 (set_voltage_mv). It reads 0 while the device is
+  // driving the load ramp itself and shows the test voltage during the
+  // free-running phases, so keep the highest value seen rather than the latest.
+  const mv = Math.round((state.volts || 0) * 1000);
+  if (mv > (accelRun.voltageMv || 0)) accelRun.voltageMv = mv;
+
+  if (tag === 'ACCEL_LOAD') {
+    // ACCEL_LOAD,<pass>,<No_rpm>,<No_mA>,<f5>,<f6>,<Lo_rpm>,<Lo_mA>,<Hi_rpm>,<Hi_mA>
+    const v = parts.slice(1).map(x => parseInt(x));
+    if (v.length >= 9) {
+      accelRun.passes.push({
+        pass_no:   v[0],
+        direction: state.dir === 'N' || state.dir === 'R' ? state.dir : null,
+        no_rpm: v[1], no_ma: v[2],
+        field5: v[3], field6: v[4],
+        lo_rpm: v[5], lo_ma: v[6],
+        hi_rpm: v[7], hi_ma: v[8],
+        raw_line: line
+      });
+      const p = accelRun.passes[accelRun.passes.length - 1];
+      const retention = p.no_rpm ? Math.round(100 * p.hi_rpm / p.no_rpm) : 0;
+      showToast(`AccelTest pass ${p.pass_no}: ${p.no_rpm} → ${p.hi_rpm} rpm (${retention}% retained)`);
+    }
+    return;
+  }
+
+  if (tag === 'ACCEL_DONE') {
+    saveAccelTest();
+    return;
+  }
+}
+
+async function saveAccelTest() {
+  if (!accelRun) return;
+  const run = accelRun;
+  accelRun = null;
+
+  if (!run.passes.length) {
+    showToast('AccelTest finished but reported no results', true);
+    return;
+  }
+
+  // Never drop the data silently for want of a motor — save it unattributed
+  // and say so, rather than discarding a three-minute test.
+  if (!run.motorId) {
+    showToast('AccelTest saved with no motor selected — attach it later', true);
+  }
+
+  const payload = {
+    motor_id: run.motorId,
+    motor_identifier: run.motorIdentifier,
+    connection_id: run.connectionId,
+    test_voltage_mv: run.voltageMv,
+    raw_lines: run.raw.join('\n'),
+    passes: run.passes
+  };
+
+  const res = await apiPost('/api/accel/save', payload);
+  if (!res || res.error) {
+    showToast('Could not save AccelTest' + (res && res.error ? ': ' + res.error : ''), true);
+    console.error('[MBC2] AccelTest save failed', res, payload);
+    return;
+  }
+  const best = run.passes.reduce((a, p) => Math.max(a, p.hi_rpm || 0), 0);
+  showToast(`AccelTest saved — ${run.passes.length} pass(es), best high-load ${best} rpm`);
+  if (typeof refreshAll === 'function') refreshAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PARSE — Line router
 // ═══════════════════════════════════════════════════════════════
 function parseLine(line) {
@@ -1582,6 +1697,13 @@ function parseLine(line) {
   }
   if (line.startsWith('SETTING:')) {
     handleSettingMessage(line);
+    return;
+  }
+  // AccelTest (firmware v0.200+). Must be routed before the CSV fallback:
+  // these lines start with letters, not digits, but the fallback treats
+  // anything unrecognised as telemetry.
+  if (line.startsWith('ACCEL_')) {
+    handleAccelMessage(line);
     return;
   }
   if (line.startsWith('LOG:')) {

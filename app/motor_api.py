@@ -63,6 +63,33 @@ def handle_motor_api(handler):
     path = handler.path.split('?')[0].rstrip('/')
     method = handler.command
 
+    # ── POST /api/accel/save ─────────────────────────────────────
+    # Kept above the /api/motors routes: these paths do not collide, but the
+    # generic /api/motors/<identifier> handler further down is greedy and this
+    # file's ordering rule is "specific before generic".
+    if method == 'POST' and path == '/api/accel/save':
+        try:
+            body = _read_body(handler)
+            test_id = db.save_accel_test(body)
+            _send_json(handler, {'success': True, 'accel_test_id': test_id})
+        except Exception as e:
+            _send_error(handler, f'Could not save AccelTest: {e}', 500)
+        return
+
+    # ── GET /api/accel[?motor_id=n] ──────────────────────────────
+    if method == 'GET' and path == '/api/accel':
+        try:
+            qs = handler.path.split('?', 1)[1] if '?' in handler.path else ''
+            motor_id = None
+            for part in qs.split('&'):
+                if part.startswith('motor_id='):
+                    motor_id = int(part.split('=', 1)[1])
+            tests = db.get_accel_tests(motor_id=motor_id)
+            _send_json(handler, {'tests': tests, 'count': len(tests)})
+        except Exception as e:
+            _send_error(handler, f'Could not read AccelTests: {e}', 500)
+        return
+
     # ── GET /api/motors ─────────────────────────────────────────
     if method == 'GET' and path == '/api/motors':
         motors = db.list_motors(status='Active')

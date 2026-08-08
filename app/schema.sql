@@ -334,3 +334,49 @@ CREATE TABLE IF NOT EXISTS crash_events (
 
 CREATE INDEX IF NOT EXISTS idx_crash_events_connection ON crash_events(connection_id);
 CREATE INDEX IF NOT EXISTS idx_connections_started ON connections(started_at);
+
+-- ============================================================
+-- ACCELTEST (firmware v0.200+)
+-- ============================================================
+
+-- AccelTest reports the RPM a motor reaches at three fixed current draws.
+-- The load levels are derived per motor by the device, so the measured
+-- currents must be stored with the RPMs: 'no-load' was 749 mA on a box-stock
+-- motor and 313 mA on a Torque-Tuned 2. Comparisons are only meaningful
+-- between tests at the same test_voltage_mv.
+--
+-- The test is started on the device; the app can only listen. Output is
+-- undocumented by mic-LABO - see the appendix in docs/SERIAL_SPEC.md.
+CREATE TABLE IF NOT EXISTS accel_tests (
+    accel_test_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    recorded_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+    motor_id        INTEGER REFERENCES motors(motor_id),
+    motor_identifier TEXT,                  -- denormalised, survives motor edits
+    connection_id   INTEGER REFERENCES connections(connection_id),
+    test_voltage_mv INTEGER,                -- from CSV col11 during the run
+    pass_count      INTEGER NOT NULL DEFAULT 0,
+    firmware        TEXT,
+    raw_lines       TEXT,                   -- every ACCEL_* line, verbatim
+    notes           TEXT
+);
+
+-- One row per pass. A test runs 1-10 passes depending on the device setting,
+-- and 'both directions' produces one pass each way.
+CREATE TABLE IF NOT EXISTS accel_test_passes (
+    accel_pass_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    accel_test_id   INTEGER NOT NULL REFERENCES accel_tests(accel_test_id),
+    pass_no         INTEGER NOT NULL,
+    direction       TEXT,                   -- 'N' or 'R', from CSV col12
+    no_rpm          INTEGER,
+    no_ma           INTEGER,
+    lo_rpm          INTEGER,
+    lo_ma           INTEGER,
+    hi_rpm          INTEGER,
+    hi_ma           INTEGER,
+    field5          INTEGER,                -- probably winding resistance, mOhm
+    field6          INTEGER,                -- undecoded
+    raw_line        TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_accel_tests_motor ON accel_tests(motor_id);
+CREATE INDEX IF NOT EXISTS idx_accel_passes_test ON accel_test_passes(accel_test_id);

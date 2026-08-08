@@ -426,8 +426,9 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split('?')[0]
 
-        # ── Motor / Profile API ──────────────────────────────────────────────
-        if path.startswith('/api/motors') or path.startswith('/api/profiles'):
+        # ── Motor / Profile / AccelTest API ──────────────────────────────────
+        if (path.startswith('/api/motors') or path.startswith('/api/profiles')
+                or path.startswith('/api/accel')):
             motor_api.handle_motor_api(self)
             return
 
@@ -605,8 +606,9 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split('?')[0]
 
-        # ── Motor / Profile API ──────────────────────────────────────────────
-        if path.startswith('/api/motors') or path.startswith('/api/profiles'):
+        # ── Motor / Profile / AccelTest API ──────────────────────────────────
+        if (path.startswith('/api/motors') or path.startswith('/api/profiles')
+                or path.startswith('/api/accel')):
             motor_api.handle_motor_api(self)
             return
 
@@ -735,8 +737,9 @@ class MBC2Handler(http.server.BaseHTTPRequestHandler):
     def do_DELETE(self):
         path = self.path.split('?')[0]
 
-        # ── Motor / Profile API ──────────────────────────────────────────────
-        if path.startswith('/api/motors') or path.startswith('/api/profiles'):
+        # ── Motor / Profile / AccelTest API ──────────────────────────────────
+        if (path.startswith('/api/motors') or path.startswith('/api/profiles')
+                or path.startswith('/api/accel')):
             motor_api.handle_motor_api(self)
             return
 

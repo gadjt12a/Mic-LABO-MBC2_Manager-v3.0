@@ -781,6 +781,111 @@ def _ensure_crash_events_table(conn):
     """)
 
 
+def _ensure_accel_tables(conn):
+    """Create the AccelTest tables if missing (migration for existing DBs).
+
+    Two tables because one test runs 1-10 passes (device setting), and each
+    pass is a separate direction/repeat with its own numbers.
+
+    Field names deliberately mirror what the device sends rather than what we
+    think it means: field5 is probably winding resistance in milliohms and
+    field6 is undecoded. See the v0.200 appendix in docs/SERIAL_SPEC.md. The
+    raw line is stored alongside so a later decode can be applied to tests
+    already recorded.
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS accel_tests (
+            accel_test_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            recorded_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+            motor_id        INTEGER REFERENCES motors(motor_id),
+            motor_identifier TEXT,
+            connection_id   INTEGER REFERENCES connections(connection_id),
+            test_voltage_mv INTEGER,
+            pass_count      INTEGER NOT NULL DEFAULT 0,
+            firmware        TEXT,
+            raw_lines       TEXT,
+            notes           TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS accel_test_passes (
+            accel_pass_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            accel_test_id   INTEGER NOT NULL REFERENCES accel_tests(accel_test_id),
+            pass_no         INTEGER NOT NULL,
+            direction       TEXT,
+            no_rpm          INTEGER,
+            no_ma           INTEGER,
+            lo_rpm          INTEGER,
+            lo_ma           INTEGER,
+            hi_rpm          INTEGER,
+            hi_ma           INTEGER,
+            field5          INTEGER,
+            field6          INTEGER,
+            raw_line        TEXT
+        )
+    """)
+
+
+def save_accel_test(payload: dict) -> int:
+    """Store one completed AccelTest and its passes. Returns accel_test_id."""
+    passes = payload.get('passes') or []
+    with get_connection() as conn:
+        _ensure_accel_tables(conn)
+        cur = conn.execute("""
+            INSERT INTO accel_tests
+                (motor_id, motor_identifier, connection_id, test_voltage_mv,
+                 pass_count, firmware, raw_lines, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            payload.get('motor_id'),
+            payload.get('motor_identifier'),
+            payload.get('connection_id'),
+            payload.get('test_voltage_mv'),
+            len(passes),
+            payload.get('firmware'),
+            payload.get('raw_lines'),
+            payload.get('notes'),
+        ))
+        test_id = cur.lastrowid
+        for p in passes:
+            conn.execute("""
+                INSERT INTO accel_test_passes
+                    (accel_test_id, pass_no, direction, no_rpm, no_ma,
+                     lo_rpm, lo_ma, hi_rpm, hi_ma, field5, field6, raw_line)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                test_id, p.get('pass_no'), p.get('direction'),
+                p.get('no_rpm'), p.get('no_ma'),
+                p.get('lo_rpm'), p.get('lo_ma'),
+                p.get('hi_rpm'), p.get('hi_ma'),
+                p.get('field5'), p.get('field6'), p.get('raw_line'),
+            ))
+        conn.commit()
+        return test_id
+
+
+def get_accel_tests(motor_id: int = None, limit: int = 50) -> list:
+    """Recent AccelTests with their passes, newest first."""
+    with get_connection() as conn:
+        _ensure_accel_tables(conn)
+        if motor_id:
+            rows = conn.execute(
+                "SELECT * FROM accel_tests WHERE motor_id = ? "
+                "ORDER BY accel_test_id DESC LIMIT ?", (motor_id, limit)).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM accel_tests ORDER BY accel_test_id DESC LIMIT ?",
+                (limit,)).fetchall()
+        result = []
+        for r in rows:
+            t = dict(r)
+            t['passes'] = [dict(p) for p in conn.execute(
+                "SELECT * FROM accel_test_passes WHERE accel_test_id = ? "
+                "ORDER BY pass_no", (t['accel_test_id'],)).fetchall()]
+            result.append(t)
+        return result
+
+
 def open_connection() -> int:
     """Record a new serial connection opening. Returns connection_id."""
     with get_connection() as conn:

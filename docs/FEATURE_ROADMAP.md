@@ -255,26 +255,34 @@ seconds per pass. Because the loads are fixed *currents*, results are directly
 comparable between motors in a way peak RPM never was: same electrical input,
 different mechanical output. See the appendix in `docs/SERIAL_SPEC.md`.
 
-Why this is worth building, demonstrated on two box-stock motors at 3.0V:
+Why this is worth building. Six runs, three motors, two voltages each — first
+pass of each shown:
 
-| | Motor 1 (N/R) | Motor 2 (N/R) |
-|---|---|---|
-| No-load | 19,080 / 18,980 | 16,560 / 16,580 |
-| High-load | 8,970 / 8,918 | **9,058 / 9,690** |
+| Motor | 3.0V No → Hi | lost | 4.0V No → Hi | lost |
+|---|---|---|---|---|
+| Box stock 1 | 19,080 → 8,970 | **−53%** | 24,060 → 15,125 | **−37%** |
+| Box stock 2 | 16,560 → 9,058 | **−45%** | 20,540 → 14,320 | **−30%** |
+| Torque-Tuned 2 | 18,630 → 14,664 | **−21%** | 23,400 → 19,905 | **−15%** |
 
-Motor 1 is 15% faster free-running — the only figure the app records today — yet
-motor 2 matches it under load and beats it by 8.7% in reverse. Peak RPM would
-have picked the wrong motor.
+The TT2 and box stock 1 have nearly the same free-running speed — 18,630 vs
+19,080 at 3.0V, and 23,400 vs 24,060 at 4.0V — and the TT2 is **32-63% faster
+under load**. Peak RPM, the only figure the app records today, cannot tell these
+two motors apart at all.
 
-**Two constraints this data imposes on the design:**
+**Load retention** (high-load ÷ no-load) reduces this to one comparable number:
+box stock 47-70%, TT2 79-85%. Worth showing per motor per voltage.
 
-1. **The ranking inverts with test voltage.** At 4.0V the same two motors swap
-   places under high load (15,125/14,645 vs 14,320/14,037). Only ever compare
-   tests taken at the same voltage, and never present a single "best motor"
-   verdict from one test.
-2. **Current targets are per motor**, not device constants — ~750/830/2150 mA
-   for motor 1 against ~700/790/1900 mA for motor 2. Store the actual currents;
-   comparisons are near-like-for-like, not exact.
+**Constraints this data imposes on the design:**
+
+1. **Current targets are per motor**, and vary widely by type — the TT2's
+   no-load level was 313 mA against box stock's 749 mA, less than half. Store
+   the actual currents: otherwise a 313 mA measurement gets compared against a
+   749 mA one and both get called "no-load".
+2. **Compare voltage-matched only.** Every figure, including load retention,
+   changes with test voltage. Two *closely matched* motors even swapped places
+   under load between 3.0V and 4.0V (stock 1 vs stock 2). Genuinely different
+   motors did not — the TT2 won at both — so this is a caution about
+   near-identical motors, not a general instability.
 
 **Constraint that shapes the design: the app cannot start an AccelTest.** No
 serial command exists for it; the test is started on the device. So every step
@@ -301,7 +309,9 @@ below is passive — the app watches for `ACCEL_*` lines and records what arrive
 
 ### 9.3 Use it
 
-- [ ] Compare motors at the same load rather than on peak RPM.
+- [ ] Compare motors at the same load rather than on peak RPM, voltage-matched.
+- [ ] **Load retention** (high-load ÷ no-load) as a single headline figure — the
+      one number that separated the TT2 from box stock while peak RPM could not.
 - [ ] Pre/post break-in comparison: does break-in improve *loaded* RPM more than
       free RPM? This is answerable once a few motors have before/after tests, and
       is the first question this data makes askable.
@@ -316,8 +326,10 @@ below is passive — the app watches for `ACCEL_*` lines and records what arrive
 - ~~Whether the current targets are fixed constants or vary by motor/voltage.~~
   **Answered:** constant across voltage within a motor, but 5–12% different
   between two motors. Store the actual values.
-- Whether a *different type* of motor (dash, torque-tuned) still produces
-  comparable load levels. Both motors tested so far were box stock.
+- ~~Whether a different type of motor still produces comparable load levels.~~
+  **Answered:** no. A Torque-Tuned 2 used 313 mA where box stock used 749 mA at
+  the "no-load" level. Load levels track the motor, so the actual currents must
+  be stored and shown alongside any RPM figure.
 
 Ask Michihiro only what the data cannot answer, and only after more runs.
 

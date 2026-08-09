@@ -24,6 +24,13 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ### Fixed
 
+- **The app window opened low and to the right instead of centred.** No `x`/`y`
+  was passed to `create_window`, so Windows placed it with its usual cascade
+  offset. It now centres in the work area — the same measurement the size clamp
+  already used, so it accounts for DPI scaling and for a taskbar docked on any
+  edge. If the calculation fails, placement falls back to pywebview's default
+  rather than putting the window somewhere wrong.
+
 - **Break-in program steps could run long if the window was not in front.**
   Step timing was a bare `setTimeout`, and browsers throttle timers in a
   hidden or occluded window — Chrome aligns them to roughly one-minute wake-ups

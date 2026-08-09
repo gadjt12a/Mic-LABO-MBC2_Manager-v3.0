@@ -107,18 +107,25 @@ def _enable_dpi_awareness():
         pass
 
 
-def _window_size(preferred=(1400, 900)):
-    """Clamp the window to the usable desktop, in the units pywebview wants.
+def _window_geometry(preferred=(1400, 900)):
+    """Size and position for the window, in the units pywebview wants.
+
+    Returns (width, height, x, y). x/y are None when they cannot be worked out,
+    which leaves pywebview to place the window itself.
 
     create_window takes logical (DPI-scaled) pixels, but webview.screens
     reports physical ones — on a 125% display that is 1920x1200 vs the 1536x960
     the window sizes are measured in. Mixing the two silently disables the
     clamp, so derive everything from the work area and divide by the scale.
     Work area excludes the taskbar; the margins leave room for the title bar.
+
+    Position is centred in that same work area. Without an explicit x/y
+    pywebview lets Windows pick, and Windows cascades new windows down and to
+    the right — so the app opened off-centre, further each time.
     """
     w, h = preferred
     if sys.platform != 'win32':
-        return w, h
+        return w, h, None, None
     import ctypes
 
     # RECT is declared here rather than taken from ctypes.wintypes: PyInstaller
@@ -129,6 +136,7 @@ def _window_size(preferred=(1400, 900)):
         _fields_ = [('left', ctypes.c_long), ('top', ctypes.c_long),
                     ('right', ctypes.c_long), ('bottom', ctypes.c_long)]
 
+    x = y = None
     try:
         scale = ctypes.windll.user32.GetDpiForSystem() / 96.0 or 1.0
         rect = RECT()
@@ -139,11 +147,18 @@ def _window_size(preferred=(1400, 900)):
         if work_w > 0 and work_h > 0:
             w = min(w, work_w - 40)
             h = min(h, work_h - 60)
+            w = max(w, 900)
+            h = max(h, 600)
+            # Offset by the work area's own origin, not 0,0 — a taskbar docked
+            # left or top moves it, and the primary monitor is not always at
+            # the desktop origin.
+            x = int(rect.left / scale) + max(0, (work_w - w) // 2)
+            y = int(rect.top / scale) + max(0, (work_h - h) // 2)
     except Exception as exc:
-        # Never fatal - fall back to the preferred size - but say so, so a
-        # failure here cannot hide again.
-        print(f'[MBC2] window size clamp failed ({exc}); using {w}x{h}')
-    return max(w, 900), max(h, 600)
+        # Never fatal - fall back to the preferred size and let pywebview place
+        # it - but say so, so a failure here cannot hide again.
+        print(f'[MBC2] window geometry failed ({exc}); using {w}x{h}')
+    return max(w, 900), max(h, 600), x, y
 
 
 def _start_server():
@@ -168,7 +183,7 @@ def _wait_for_server(timeout: float = 15.0) -> bool:
 
 def main():
     _enable_dpi_awareness()
-    win_w, win_h = _window_size()
+    win_w, win_h, win_x, win_y = _window_geometry()
 
     # One probe decides all three cases; asking twice doubled the cost of the
     # common path, where the port is simply free.
@@ -179,7 +194,8 @@ def main():
         window = webview.create_window(
             f'MBC2 Dashboard v{srv.APP_VERSION}',
             f'http://127.0.0.1:{srv.PORT}',
-            width=win_w, height=win_h, min_size=(900, 600),
+            width=win_w, height=win_h, x=win_x, y=win_y,
+            min_size=(900, 600),
         )
         window.events.loaded += _dismiss_splash
         window.events.closed += lambda: os._exit(0)
@@ -206,7 +222,8 @@ def main():
     window = webview.create_window(
         f'MBC2 Dashboard v{srv.APP_VERSION}',
         f'http://127.0.0.1:{srv.PORT}',
-        width=win_w, height=win_h, min_size=(900, 600),
+        width=win_w, height=win_h, x=win_x, y=win_y,
+        min_size=(900, 600),
     )
     global _window
     _window = window

@@ -57,6 +57,31 @@ Output:
 
 Runs on Windows. Output: `dist\MBC2Dashboard-Mac-<ver>.zip`
 
+### Do not change how that zip is written
+
+The zip is built by `mac\make-mac-zip.ps1`, which writes entries directly via
+`System.IO.Compression`. Both obvious alternatives are broken, and both fail
+only once the package reaches a Mac:
+
+- **`Compress-Archive`** (PowerShell 5.1) writes **backslash** path separators.
+  The zip spec requires forward slashes, and macOS may extract the tree as flat
+  files literally named `MBC2Dashboard\app\server.py`, leaving the launcher
+  unable to find `app/server.py`. **The shipped v4.0.1 Mac zip had this.**
+- **`tar.exe`** (bsdtar) writes forward slashes correctly but **pads the archive
+  to a 10240-byte block**, leaving trailing zeros after the end-of-central-
+  directory record. Strict readers reject the file outright — Python's
+  `zipfile` and .NET both refuse to open it.
+
+The script also sets the Unix execute bit (`ExternalAttributes`) on the
+`.command`, which neither alternative can do, and verifies its own output: it
+fails the build on backslashes, an empty archive, or a launcher that is not
+marked executable.
+
+Note the Mac package is **source + browser**, not a PyInstaller `.app`. There is
+no pywebview, no `.icns`, no App Transport Security plist and no Gatekeeper
+notarization involved. If that ever changes, most of the macOS packaging
+literature that does not currently apply suddenly will.
+
 ---
 
 ## Bat file encoding note (ASCII-bat gotcha)
@@ -78,10 +103,20 @@ dist\MBC2Dashboard-WindowsPortable-<ver>.zip   should contain:
     MBC2Dashboard\Start MBC2 (this PC).bat
     MBC2Dashboard\README.txt
 dist\MBC2Dashboard-Mac-<ver>.zip               should contain:
-    MBC2Dashboard\Start MBC2 Dashboard.command
-    MBC2Dashboard\README.txt
-    MBC2Dashboard\app\server.py  (and other app files)
+    MBC2Dashboard/Start MBC2 Dashboard.command   (note: forward slashes,
+    MBC2Dashboard/README.txt                      and -rwxr-xr-x on the
+    MBC2Dashboard/app/server.py                   .command)
 ```
+
+The build fails itself on the zip checks, but to inspect a zip by hand:
+
+```
+python -c "import zipfile,stat; z=zipfile.ZipFile(r'dist\MBC2Dashboard-Mac-4.0.1.zip'); [print(stat.filemode(i.external_attr>>16), i.filename) for i in z.infolist()]"
+```
+
+Opening without error proves the central directory is intact; the mode column
+must show `-rwxr-xr-x` on the `.command`, and no filename may contain a
+backslash.
 
 **Verify no `.db` files are in the dist output** before publishing.
 

@@ -24,6 +24,20 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ### Fixed
 
+- **The Mac package zip was malformed and probably unusable.** `Compress-Archive`
+  wrote backslash path separators into it, which the zip spec forbids; macOS can
+  extract such an archive as flat files literally named
+  `MBC2Dashboard\app\server.py`, leaving the launcher unable to find
+  `app/server.py`. The v4.0.1 Mac zip has this defect. It is now built by
+  `mac\make-mac-zip.ps1`, which writes spec-clean entries, sets the Unix execute
+  bit on the launcher so it no longer needs a manual `chmod +x`, and fails the
+  build if either check regresses. (`tar.exe` was tried first and rejected — it
+  pads past the end-of-central-directory record.) Mac remains untested on real
+  hardware; this fixes a defect found by inspection, not by running it.
+- The Mac launcher now carries its execute bit in git (`100755`).
+- Mac README: documented the "is damaged and can't be opened" wording that macOS
+  shows for an unsigned app on first launch, since it is alarming and false.
+
 - **Startup wasted ~3 seconds proving the port was free.** The already-running
   and port-in-use checks each blocked on a connection to a closed loopback
   port. This machine does not refuse those promptly — a blocking `connect_ex`

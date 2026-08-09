@@ -30,7 +30,17 @@ copy /y "app\default_programs.json"         "%STAGE%\app\"  >nul
 copy /y "app\VERSION"                       "%STAGE%\app\"  >nul
 copy /y "requirements.txt"                  "%STAGE%\"      >nul
 
-powershell -Command "Compress-Archive -Force -Path 'dist\mac-stage\MBC2Dashboard' -DestinationPath 'dist\MBC2Dashboard-Mac-%APPVERSION%.zip'"
+REM  Zip via make-mac-zip.ps1 - NOT Compress-Archive (writes backslash path
+REM  separators) and NOT tar.exe (pads past the end-of-central-directory
+REM  record). See the header of that script for the detail. It also sets the
+REM  Unix execute bit on the .command and verifies its own output.
+powershell -NoProfile -ExecutionPolicy Bypass -File "mac\make-mac-zip.ps1" -StageDir "dist\mac-stage" -ZipPath "dist\MBC2Dashboard-Mac-%APPVERSION%.zip"
+if errorlevel 1 (
+    echo  BUILD FAILED - see zip check above.
+    rmdir /s /q "dist\mac-stage"
+    pause
+    exit /b 1
+)
 rmdir /s /q "dist\mac-stage"
 
 if not exist "dist\MBC2Dashboard-Mac-%APPVERSION%.zip" (

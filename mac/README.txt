@@ -38,7 +38,13 @@ FIRST RUN
 1. Right-click "Start MBC2 Dashboard.command" -> Open -> Open
    (one-off macOS security approval; after that just double-click).
 
-2. If macOS says it cannot be executed, open Terminal and run:
+   If macOS says the file "is damaged and can't be opened" - it is not.
+   That is the message an unsigned app gets on first launch. Use the
+   right-click -> Open route above, or approve it in System Settings ->
+   Privacy & Security -> "Open Anyway".
+
+2. The launcher should already be executable. If macOS says it cannot be
+   executed, open Terminal and run:
       chmod +x "Start MBC2 Dashboard.command"
 
 3. The app opens in your browser on http://127.0.0.1:8766

@@ -110,6 +110,18 @@ Key architectural facts:
   connection to a *closed* loopback port takes ~2 s to be refused, so long
   timeouts cost ~3 s of every launch. A real listener accepts in ~2 ms, so the
   short timeout cannot produce a false "port free". Raising it undoes the fix.
+- **The Mac package is source + browser, not a `.app`.** `mac\BUILD MAC PACKAGE`
+  stages `app/` beside a `.command` launcher and zips it. There is no
+  PyInstaller, no pywebview, no `.icns`, no App Transport Security plist and no
+  Gatekeeper notarization on that path — most macOS packaging advice found
+  elsewhere is about a frozen `.app` and does not apply here.
+- **Never build the Mac zip with `Compress-Archive` or `tar.exe`.** The first
+  writes backslash path separators (spec-violating; macOS may extract the tree
+  as flat files named `MBC2Dashboard\app\server.py`, and the shipped v4.0.1 zip
+  had exactly this). The second pads past the end-of-central-directory record,
+  so strict readers refuse to open the file at all. Use
+  `mac\make-mac-zip.ps1`, which also sets the launcher's Unix execute bit and
+  self-checks. Both failures are invisible on Windows.
 - **Unload warnings must not rely on `beforeunload`.** WebView2 ignores it
   entirely, so the packaged app got no prompt and silently discarded unsaved
   rows. The close confirmation is a native pywebview dialog driven by recording

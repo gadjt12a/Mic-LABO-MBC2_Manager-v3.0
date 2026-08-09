@@ -21,6 +21,20 @@ All notable changes to MBC2 Dashboard are documented here.
 - New API routes: `POST /api/accel/save`, `GET /api/accel[?motor_id=n]`,
   `POST /api/accel/<id>/motor`, `DELETE /api/accel/<id>`.
 - New tables `accel_tests` and `accel_test_passes`, auto-created on launch.
+- `tests/test_program_timing.js` — a regression test for break-in step timing,
+  run with `node tests/test_program_timing.js`. Node is a developer tool only;
+  nothing in the app or the build depends on it. See `tests/README.md`.
+
+### Changed
+
+- AccelTest figures now carry their units: the large number is labelled `rpm`
+  and the smaller one reads `at 756 mA`, so it is clear the current is what the
+  motor drew to reach that speed rather than a separate measurement. "retained"
+  is now "load retention". Added a legend on the AccelTest tab and a tooltip on
+  each figure, covering the part that cannot be inferred from the numbers — the
+  device derives the three load levels per motor, so "no load" is a different
+  current on different motors, and results are only comparable at the same test
+  voltage.
 
 ### Fixed
 
@@ -46,7 +60,8 @@ All notable changes to MBC2 Dashboard are documented here.
   wrote backslash path separators into it, which the zip spec forbids; macOS can
   extract such an archive as flat files literally named
   `MBC2Dashboard\app\server.py`, leaving the launcher unable to find
-  `app/server.py`. The v4.0.1 Mac zip has this defect. It is now built by
+  `app/server.py`. Every Mac zip built before 2026-08-09 had this defect,
+  including the one previously sitting in `dist/`. It is now built by
   `mac\make-mac-zip.ps1`, which writes spec-clean entries, sets the Unix execute
   bit on the launcher so it no longer needs a manual `chmod +x`, and fails the
   build if either check regresses. (`tar.exe` was tried first and rejected — it

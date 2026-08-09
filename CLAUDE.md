@@ -58,7 +58,13 @@ Key architectural facts:
   it and reports `pyserial not installed` on connect.
 - Fully DB-only storage (no CSV files). All session data goes to SQLite.
 - `connections` table tracks device connection lifecycle.
-- `sessions` table has `connection_id` FK, `duration_sec`, `end_reason`.
+- **`sessions` does NOT have `connection_id`, `duration_sec` or `end_reason`** —
+  this file and `docs/DB_SCHEMA.md` both claimed it did until 2026-08-09, and
+  neither the schema nor any live database has ever had those columns. The table
+  is `session_id, motor_id, session_type, session_date, notes, ambient_temp_c`.
+  A consequence: sessions are not linked to connections at all, so
+  `connections.total_sessions` is 0 on every row. Check `app/schema.sql` before
+  writing a query against `sessions`.
 - `crash_events` table captures full motor state snapshots on unexpected silence.
 - JS silence watchdog fires after 30 seconds of no data while recording.
 - Loop/round tracking: `loop_number`, `max_loop`, `prog_loop`, `prog_max_loop` captured in session data and crash events.
@@ -78,6 +84,26 @@ Key architectural facts:
   slots answer `GET_PROG` with a blank name and all steps at 0.0V/OFF/0s;
   `isDeviceProgramEmpty()` is the test, and the dropdown hides them.
 - Manual (MANU) runs are recorded via the `manualRun` flag. The MANU guard in the data handler exists to skip idle frames while waiting for a program to start, and must stay in place for program runs.
+- **AccelTest cannot be started by the app, and no amount of looking will find
+  the command.** Firmware v0.200+ has an AccelTest in the device's own menu;
+  there is no serial command for it, so the app is purely passive — it watches
+  for `ACCEL_*` lines in `handleAccelMessage()` and records what arrives. Do not
+  add a "run AccelTest" button.
+- **A completed AccelTest with no motor selected is saved anyway**, with
+  `accel_tests.motor_id` NULL and a warning toast. That is deliberate: the test
+  costs minutes of motor time and is not worth discarding for a tidy schema.
+  `POST /api/accel/<id>/motor` claims it afterwards, which is the only reason
+  the AccelTest tab has an attach dropdown.
+- **Store the current beside every AccelTest RPM.** The device derives its three
+  load levels *per motor* — a Torque-Tuned 2 drew 313 mA where a box stock drew
+  749 mA at the same "no-load" level. Without `*_ma`, two motors measured at
+  very different loads both read as "no-load" and look comparable when they are
+  not.
+- **AccelTest voltage comes from CSV `col11`, sampled from before the test
+  starts.** `col11` reads 0 while the device drives its own load ramp, so
+  watching it from the first `ACCEL_` line onward records the wrong value — it
+  logged 1500 mV for a 3.0 V test. `lastSetVoltageMv` is tracked continuously in
+  `parseCSVTelemetry` for exactly this reason.
 
 ---
 

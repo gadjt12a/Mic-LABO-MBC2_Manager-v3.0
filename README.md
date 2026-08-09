@@ -8,11 +8,16 @@ Data logger, program library, motor registry, and full bidirectional device cont
 
 | Platform | Package | Notes |
 |---|---|---|
-| **Windows** | `MBC2Dashboard-Setup-4.0.exe` | Installer — recommended |
-| **Windows** | `MBC2Dashboard-WindowsPortable-4.0.zip` | USB / portable — no install needed |
-| **Mac** | `MBC2Dashboard-Mac-4.0.zip` | Source package — UNTESTED disclaimer inside |
+| **Windows** | `MBC2Dashboard-Setup-<version>.exe` | Installer — recommended |
+| **Windows** | `MBC2Dashboard-WindowsPortable-<version>.zip` | USB / portable — no install needed |
+| **Mac** | `MBC2Dashboard-Mac-<version>.zip` | Source package — UNTESTED disclaimer inside |
 
 Download from the [GitHub Releases](../../releases) page.
+
+> **No GitHub release has been published yet.** `v4.0` is tagged, but tagging
+> does not upload artefacts and `dist/` is not in the repository. Until a
+> release is cut, the packages have to be built from source — see
+> [`BUILD.md`](BUILD.md).
 
 ---
 
@@ -35,7 +40,7 @@ browser. Chrome and Edge are what we test; other modern browsers should work.
 
 ## Windows — Installer
 
-1. Download `MBC2Dashboard-Setup-4.0.exe`
+1. Download `MBC2Dashboard-Setup-<version>.exe`
 2. Run it (click **More info → Run anyway** if SmartScreen appears)
 3. A desktop icon is created; launch it
 4. The dashboard opens in its own window — pick your MBC2's COM port and click **Connect MBC2**
@@ -44,16 +49,22 @@ Your motor database is stored at `%LOCALAPPDATA%\MBC2Dashboard\mbc2.db` and is *
 
 ## Windows — USB / Portable
 
-1. Download and unzip `MBC2Dashboard-WindowsPortable-4.0.zip`
+1. Download and unzip `MBC2Dashboard-WindowsPortable-<version>.zip`
 2. Read `README.txt` inside the zip
 3. Double-click **`Start MBC2 (USB).bat`** to store data on the stick, or **`Start MBC2 (this PC).bat`** to use your PC's standard data folder
 
 ## Mac
 
-1. Download and unzip `MBC2Dashboard-Mac-4.0.zip`
+1. Download and unzip `MBC2Dashboard-Mac-<version>.zip`
 2. Read `README.txt` inside the zip
-3. Right-click **`Start MBC2 Dashboard.command`** → Open → Open (required on first launch)
-4. If macOS says it cannot be executed: `chmod +x "Start MBC2 Dashboard.command"` in Terminal
+3. Right-click **`Start MBC2 Dashboard.command`** → Open → Open (required on first
+   launch — the package is unsigned, and macOS may claim it "is damaged", which
+   it is not)
+4. The launcher ships with its execute bit set. If macOS still says it cannot be
+   executed: `chmod +x "Start MBC2 Dashboard.command"` in Terminal
+
+**The Mac package has never been run on a Mac.** It is structurally verified
+only — see [`BUILD.md`](BUILD.md).
 
 ---
 
@@ -82,6 +93,11 @@ and run `python3 app/app.py` (Windows/Mac desktop only).
 - **Program library** — create, edit and store break-in profiles; import/export JSON
 - **Program sync** — read all 50 device slots in one action, save one into your library, or write a program to a slot so the MBC2 can run standalone without the laptop (RAM only; the device's saved programs are never overwritten)
 - **Motor registry** — register motors, track break-in history, compare sessions
+- **AccelTest results** (firmware v0.200+) — the device's own AccelTest is
+  captured automatically and shown per motor: RPM at three load levels with the
+  current measured at each, plus load retention (high-load ÷ no-load), the
+  figure that separates motors peak RPM cannot. The test is started on the
+  device; the app records what it sends
 - **Benchmark mode** — automated voltage ramp with per-step kV results and efficiency rating
 - **Crash log** — silence watchdog captures full motor state on unexpected data gaps
 - **Connection tracking** — records each USB connection lifecycle
@@ -95,7 +111,9 @@ app/        app.py, server.py, db_manager.py, motor_api.py, mbc2-dashboard.html
             schema.sql, default_programs.json, VERSION, icon.ico, splash.png
 windows/    MBC2Dashboard.iss, BUILD EXE.bat, BUILD INSTALLER.bat
             installer-info.txt, USB launcher bats, README.txt
-mac/        Start MBC2 Dashboard.command, BUILD MAC PACKAGE.bat, README.txt
+mac/        Start MBC2 Dashboard.command, BUILD MAC PACKAGE.bat,
+            make-mac-zip.ps1, README.txt
+tests/      test_program_timing.js (run with node; developer tool only)
 docs/       SERIAL_SPEC.md, DB_SCHEMA.md, FEATURE_ROADMAP.md, VERSION_HISTORY.md
 ```
 

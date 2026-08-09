@@ -5,6 +5,11 @@
 rows 7, 9 (benchmark half), 12 and 13 outstanding. GitHub release not yet
 created.*
 
+*Packaging is finished; `main` has since moved on to features (AccelTest capture
+and display, Phases 9.1–9.2) and to fixes that changed a packaging artefact —
+see the Mac note on row 12. This document covers the release effort only; it is
+not the place to track feature work.*
+
 Modelled on the Tamiya Race Manager v10 packaging plan; reuses its build
 machinery (PyInstaller spec, Inno Setup script, build bats, Mac zip builder,
 `app`/`windows`/`mac` repo layout) with MBC2-specific changes noted throughout.
@@ -103,6 +108,15 @@ CLAUDE.md: never drop or rename columns.
 ---
 
 ## Packaging specifics
+
+> ⚠ **This section is the plan as written on 2026-07-20 and parts of it were
+> overtaken by Phase 4.5.** It is kept for the reasoning, not as a description
+> of what shipped. Specifically: the entry point *is* now `app/app.py` with a
+> native pywebview window, and **Chrome is not required** on Windows — serial
+> moved into Python, so the browser requirement survives only for running from
+> source and on Mac, where any modern browser works. Where this section and the
+> architecture note above disagree, the note above is correct. Read
+> `BUILD.md` for what the build actually does today.
 
 ### Windows exe (PyInstaller, onefile)
 
@@ -501,7 +515,7 @@ the `v4.0` release.
 | 10 | Stop Server button on packaged exe | Server exits, no orphaned process in Task Manager | ✓ **PASSED** 2026-08-07 — the button itself, on the packaged exe: confirmation shown, "server stopped" reported, window closed, **both** processes (parent 26504 and child 10884) gone, port 8766 released, nothing left in Task Manager, `Shutdown requested.` logged. The `GET /api/shutdown` path was verified separately the same day. ⚠ An orphaned `MBC2Dashboard.exe` was observed twice, but only ever when Restart Manager was simultaneously trying to close the app during an install — see Phase 5 defect 1, now fixed. |
 | 11 | **Window** close mid-recording (packaged exe) | Connection record closed on window close; user warned about unsaved rows | ✓ **PASSED** 2026-08-07 — **after two fixes**. Failed first as predicted: the `pagehide` beacon never arrives because `os._exit(0)` kills the server with the window, and *no* connection in the database had ever been closed with `tab_closed`. Now closed server-side (`window_closed`) — connections 25 and 26 verified, with matching `server.log` lines. Separately, WebView2 **ignores `beforeunload`**, so closing mid-recording silently discarded unsaved rows with no prompt; replaced with a native pywebview confirmation gated on there actually being rows. Both branches verified: dialog appears with rows pending, and the window closes silently when there is nothing to lose. |
 | 11b | Tab close mid-recording (source/Mac, browser) | beforeunload warning; connection record closed (`end_reason=tab_closed`) | ✓ **PASSED** 2026-08-07 — **after a fix**. Chrome's "changes you made may not be saved" prompt appears (unlike WebView2, which ignores `beforeunload`), and connection 29 closed as `tab_closed` with the server still running. Required fixing why the beacon had *never* been delivered: `API` was the absolute `http://localhost:8766` while the page is served from `127.0.0.1:8766` — a different origin, so every request took a CORS preflight, and `sendBeacon` cannot preflight, so a JSON-typed beacon was silently dropped. `API` is now relative (same-origin, and no preflight on any call) and the beacon uses safelisted `text/plain`. |
-| 12 | Mac package on a real Mac | `pyserial` warning shown if absent; launches, serves, connects (or ships with UNTESTED disclaimer) | 🧑 KRIS / disclaimer |
+| 12 | Mac package on a real Mac | `pyserial` warning shown if absent; launches, serves, connects (or ships with UNTESTED disclaimer) | 🧑 KRIS / disclaimer — **a defect was found by inspection 2026-08-09 and fixed before this row was ever run.** `Compress-Archive` wrote backslash path separators into every Mac zip built to that date; macOS can extract such an archive as flat files literally named `MBC2Dashboard\app\server.py`, which would have left the launcher unable to find `app/server.py` — so this row would very likely have failed. Now built by `mac/make-mac-zip.ps1`, which writes spec-clean entries, sets the launcher's execute bit and fails the build on either regression. Verified structurally with Python's `zipfile` (valid central directory, forward slashes, `-rwxr-xr-x`, LF endings, layout intact). **Still never run on a Mac** — structural correctness is not the same claim. |
 | 13 | SmartScreen click-through on a machine that hasn't seen the exe | Screenshots captured for release notes | ◑ partial 2026-08-07 — installed on a second PC and **no warning appeared at all**. SmartScreen reacts to the mark-of-the-web tag that browsers and email clients attach to downloads; an installer copied via USB or a network share carries no such tag. So the warning is expected for anyone downloading from the GitHub release page, and not for anyone Kris hands a stick to. Screenshots still 🧑 KRIS, and need a **browser-downloaded** copy to reproduce. |
 
 ---

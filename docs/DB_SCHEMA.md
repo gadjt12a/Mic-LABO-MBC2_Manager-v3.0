@@ -17,98 +17,128 @@
 
 ## Tables
 
+> **Verified against `app/schema.sql` and a live database on 2026-08-09.**
+> Several tables below previously documented a design that was never built —
+> `sessions` was listed with `connection_id`, `started_at`, `duration_sec` and
+> `end_reason`, none of which exist, and the example queries could not have run.
+> If a column here is not in `schema.sql`, treat this file as wrong and fix it.
+
 ### `motors`
 
 Motor registry. One row per physical motor.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `identifier` | TEXT UNIQUE | Format: `MODEL-DIRECTION-NUMBER` e.g. `SD-R-01` |
-| `model_code` | TEXT | e.g. `SD` (Sprint Dash) |
-| `direction` | TEXT | `R` or `N` (always `R` for racing) |
-| `number` | INTEGER | Sequential per model code |
-| `label` | TEXT | Human-readable label |
-| `created_at` | TEXT | ISO8601 timestamp |
+| `motor_id` | INTEGER PK | Auto-increment |
+| `identifier` | TEXT UNIQUE | Format `MODEL-DIRECTION-NUMBER`, e.g. `SD-R-01` |
+| `model_id` | INTEGER FK | → `motor_models.model_id` |
+| `breakin_direction` | TEXT | `F` or `R` — **always `R` for racing break-in** |
+| `date_registered` | TEXT | `date('now')` default |
+| `status` | TEXT | `Active`, `Retired`, `Lost`, `Damaged` |
 | `notes` | TEXT | Free text |
 
-### `connections`
+The model code, direction and sequence number are **not** stored as separate
+columns — they are parsed out of `identifier` where needed.
 
-Device connection lifecycle. One row per USB connect event.
+### `motor_models`, `mount_types`, `chassis`, `motor_chassis_assignments`
 
-| Column | Type | Notes |
-|---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `connected_at` | TEXT | ISO8601 timestamp |
-| `disconnected_at` | TEXT | ISO8601 timestamp, nullable |
-| `end_reason` | TEXT | e.g. `user_disconnect`, `crash`, `timeout` |
-| `port` | TEXT | COM port name |
+Reference data seeded on first launch, plus the motor↔chassis join.
+
+| Table | Key columns |
+|---|---|
+| `motor_models` | `model_id`, `name`, `code`, `shaft_type`, `speed_stars`, `torque_stars`, `legal_classes`, `notes` |
+| `mount_types` | `mount_type_id`, `name`, `shaft_type`, `default_direction` |
+| `chassis` | `chassis_id`, `name`, `mount_type_id`, `notes` |
+| `motor_chassis_assignments` | `assignment_id`, `motor_id`, `chassis_id` |
+
+### `profiles`, `programs`, `program_steps`
+
+The app's own program library, three levels deep: a profile holds programs, a
+program holds steps. This is **not** the device's 50 slots — see `CLAUDE.md` on
+why the two are not interchangeable.
+
+| Table | Key columns |
+|---|---|
+| `profiles` | `profile_id`, `name`, `motor_model`, `chassis`, `class`, `notes`, `created_date`, `modified_date` |
+| `programs` | `program_id`, `profile_id` FK, `name`, `mbc2_label` (4-char device label), `step_order`, `cycles`, `target_rpm`, `notes` |
+| `program_steps` | `step_id`, `program_id` FK, `step_order`, `volts`, `direction` (`F`/`R`/`N`), `duration_sec`, `cool_sec` (NULL = full cool), `notes` |
+
+> **Never seed these with Christchurch club protocols (PMPE, SPRF).** They are
+> private club knowledge, distributed separately as `christchurch_protocol.json`.
 
 ### `sessions`
 
-One row per break-in run (START→STOP or crash).
+One row per recorded run. Deliberately thin — the detail lives in
+`session_data`, and the run's end state is not summarised here.
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `connection_id` | INTEGER FK | → `connections.id` |
-| `motor_identifier` | TEXT | → `motors.identifier` |
-| `program_name` | TEXT | 4-char program name from device |
-| `program_no` | INTEGER | Program number (0=MANU) |
-| `started_at` | TEXT | ISO8601 timestamp |
-| `ended_at` | TEXT | ISO8601 timestamp, nullable |
-| `duration_sec` | INTEGER | Computed on session close |
-| `end_reason` | TEXT | `completed`, `stopped`, `crashed`, `watchdog` |
-| `loop_number` | INTEGER | Current loop/round at session end |
-| `max_loop` | INTEGER | Total loops configured |
-| `prog_loop` | INTEGER | Program loop counter |
-| `prog_max_loop` | INTEGER | Program max loop |
+| `session_id` | INTEGER PK | Auto-increment |
+| `motor_id` | INTEGER FK | → `motors.motor_id`, NOT NULL |
+| `session_type` | TEXT | `Benchmark`, `Breakin`, `Manual` |
+| `session_date` | TEXT | `datetime('now')` default |
+| `notes` | TEXT | Free text |
+| `ambient_temp_c` | REAL | Optional room temp |
+
+> **There is no `connection_id` on `sessions`.** Sessions are not linked to the
+> connection they happened on, which is why `connections.total_sessions` is 0 on
+> every row ever written. Joining sessions to connections requires comparing
+> timestamps. Wiring this up properly is an open item, not a bug to be assumed
+> already done.
 
 ### `session_data`
 
-Raw telemetry rows. One row per CSV line received from device.
+Telemetry rows. One row per CSV line kept — a **parsed subset**, not all 20
+columns of the wire format. For the full CSV layout see
+[`SERIAL_SPEC.md`](SERIAL_SPEC.md).
 
 | Column | Type | Notes |
 |---|---|---|
-| `id` | INTEGER PK | Auto-increment |
-| `session_id` | INTEGER FK | → `sessions.id` |
-| `timestamp` | TEXT | ISO8601 timestamp (JS client time) |
-| `program_no` | INTEGER | col[0] |
-| `program_name` | TEXT | col[1] |
-| `target_rpm` | INTEGER | col[2] — actual RPM value |
-| `current_cycle` | INTEGER | col[3] |
-| `max_cycle` | INTEGER | col[4] |
-| `current_step` | INTEGER | col[5] |
-| `run_state` | INTEGER | col[6] — see SERIAL_SPEC.md |
-| `current_rpm` | INTEGER | col[7] — actual RPM value |
-| `max_rpm` | INTEGER | col[8] — actual RPM value |
-| `kv` | INTEGER | col[9] |
-| `voltage_mv` | INTEGER | col[10] — mV |
-| `set_voltage_mv` | INTEGER | col[11] — mV |
-| `direction` | INTEGER | col[12] — 0–4 encoding |
-| `current_ma` | INTEGER | col[13] — mA, smoothed |
-| `elapsed_sec` | INTEGER | col[14] |
-| `set_runtime_sec` | INTEGER | col[15] |
-| `cool_elapsed_sec` | INTEGER | col[16] |
-| `cool_set_sec` | INTEGER | col[17] |
-| `temperature` | INTEGER | col[18] — °C |
-| `total_rotations` | REAL | col[19] — cumulative rotation count (NOT charge) |
-| `loop_number` | INTEGER | Loop/round number at time of row |
-| `max_loop` | INTEGER | Total loops configured |
-| `prog_loop` | INTEGER | Program loop counter |
-| `prog_max_loop` | INTEGER | Program max loop |
+| `data_id` | INTEGER PK | Auto-increment |
+| `session_id` | INTEGER FK | → `sessions.session_id` |
+| `timestamp_ms` | INTEGER | **ms since session start**, not a clock time |
+| `raw_line` | TEXT | The original CSV line — see the warning below |
+| `mode` | TEXT | `MANU`, `PROG`, … |
+| `program_step` | INTEGER | |
+| `voltage_mv` | INTEGER | mV |
+| `current_ma` | INTEGER | mA (col[13], already smoothed by firmware) |
+| `rpm` | INTEGER | col[7], already an actual RPM value |
+| `temp_c` | REAL | °C |
+| `elapsed_sec` | INTEGER | |
+| `rpm_cap` | INTEGER | |
+| `kv_efficiency` | REAL | Calculated — RPM per volt |
+
+> ⚠ **`raw_line` is empty for every row ever written.** The column exists and
+> nothing populates it, so an insight that needs an unparsed field cannot be
+> applied retrospectively to existing sessions. This is the specific mistake the
+> AccelTest tables were designed to avoid.
+
+### `benchmarks`
+
+Summary row for a benchmark run. Benchmarks store **summary only — no telemetry
+rows** (by design; the charts show a dashed trace and a disclosure for them).
+
+`benchmark_id`, `session_id` FK, `motor_id` FK, `benchmark_type`
+(`Pre`/`Post`/`Periodic`), `voltage_v`, `direction`, `duration_sec`,
+`peak_rpm`, `avg_rpm`, `peak_current_ma`, `avg_current_ma`, `peak_temp_c`,
+`final_temp_c`, `notes`.
+
+### `motor_breakin_log`
+
+Which program was run on which motor and when: `log_id`, `motor_id`,
+`program_id`, `date_run`, `session_id`, `notes`.
 
 ### `connections`
 
-USB serial connection lifecycle tracking. One row per connect event.
+USB serial connection lifecycle. One row per connect event.
 
 | Column | Type | Notes |
 |---|---|---|
 | `connection_id` | INTEGER PK | Auto-increment |
 | `started_at` | TEXT | ISO8601 timestamp |
-| `ended_at` | TEXT | ISO8601 timestamp, nullable if still open or crashed |
-| `end_reason` | TEXT | `normal`, `crash`, `unknown` |
-| `total_sessions` | INTEGER | Count of sessions completed during connection |
+| `ended_at` | TEXT | ISO8601, nullable if still open or crashed |
+| `end_reason` | TEXT | `normal`, `window_closed`, `tab_closed`, `app_closed`, `crash`, `unknown` |
+| `total_sessions` | INTEGER | **Always 0** — see the `sessions` note above |
 | `notes` | TEXT | Free text |
 
 ### `crash_events`
@@ -216,42 +246,70 @@ def _add_column_if_missing(conn, table, column, col_type):
 
 Call this in the startup migration block for every column added after the initial table creation. Example:
 
+> The columns above are **illustrative and do not exist** — an earlier version of this example used `sessions.connection_id` / `duration_sec` / `end_reason`, which readers then took for real columns.
+>
+> As of 2026-08-09 `_add_column_if_missing()` is **defined in `db_manager.py` and never called**. Every table is created whole by `CREATE TABLE IF NOT EXISTS`, so no column has yet needed adding to an existing table. The helper is the required mechanism the first time one does — do not reach for a raw `ALTER TABLE`.
+
 ```python
 def migrate_db(conn):
-    # v3.1 additions
-    _add_column_if_missing(conn, 'sessions', 'connection_id', 'INTEGER')
-    _add_column_if_missing(conn, 'sessions', 'duration_sec', 'INTEGER')
-    _add_column_if_missing(conn, 'sessions', 'end_reason', 'TEXT')
-    # v3.2 additions
-    _add_column_if_missing(conn, 'session_data', 'loop_number', 'INTEGER')
-    _add_column_if_missing(conn, 'session_data', 'max_loop', 'INTEGER')
-    # etc.
+    _add_column_if_missing(conn, 'motors', 'retired_date', 'TEXT')
+    _add_column_if_missing(conn, 'sessions', 'ambient_humidity', 'REAL')
 ```
 
 ---
 
 ## Key queries
 
-### Get sessions for a motor
+All three below were run against a live database on 2026-08-09. The versions
+previously here referenced `sessions.motor_identifier`, `sessions.started_at`,
+`sessions.connection_id` and `session_data.timestamp` — none of which exist, so
+none of them could ever have run.
+
+### Sessions for a motor
+
 ```sql
-SELECT s.*, c.connected_at, c.port
+SELECT s.session_id, s.session_type, s.session_date, s.notes
 FROM sessions s
-LEFT JOIN connections c ON s.connection_id = c.id
-WHERE s.motor_identifier = ?
-ORDER BY s.started_at DESC;
+JOIN motors m ON m.motor_id = s.motor_id
+WHERE m.identifier = ?
+ORDER BY s.session_date DESC;
 ```
 
-### Get telemetry for a session
+There is no join to `connections` — `sessions` has no `connection_id`.
+
+### Telemetry for a session
+
 ```sql
 SELECT * FROM session_data
 WHERE session_id = ?
-ORDER BY timestamp ASC;
+ORDER BY timestamp_ms ASC;
 ```
 
-### Get crash events with session context
+`timestamp_ms` is milliseconds since the session started, not a clock time.
+
+### Crash events with motor context
+
 ```sql
-SELECT ce.*, s.motor_identifier, s.program_name
+SELECT ce.event_id, ce.logged_at, ce.trigger, ce.silence_duration_sec,
+       ce.motor_identifier, ce.prog_name, ce.rows_captured
 FROM crash_events ce
-JOIN sessions s ON ce.session_id = s.id
-ORDER BY ce.timestamp DESC;
+ORDER BY ce.logged_at DESC;
 ```
+
+`crash_events` already carries `motor_identifier` and `prog_name` denormalised,
+so the join to `sessions` the old version attempted is unnecessary — and
+`ce.session_id` is frequently NULL anyway.
+
+### AccelTest results for a motor, best load retention first
+
+```sql
+SELECT t.recorded_at, t.test_voltage_mv, p.direction,
+       p.no_rpm, p.no_ma, p.hi_rpm, p.hi_ma,
+       ROUND(100.0 * p.hi_rpm / p.no_rpm, 1) AS retention_pct
+FROM accel_tests t
+JOIN accel_test_passes p ON p.accel_test_id = t.accel_test_id
+WHERE t.motor_id = ?
+ORDER BY retention_pct DESC;
+```
+
+Only compare rows with the same `test_voltage_mv`.

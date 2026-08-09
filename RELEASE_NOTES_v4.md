@@ -2,17 +2,68 @@
 
 *v4.0 tagged 2026-08-07. Still a draft: USB mode has not been tried on a second
 machine, the Mac package is untested on a real Mac, and no full 3-minute
-baseline benchmark has been recorded.*
+baseline benchmark has been recorded. The AccelTest features in 4.0.1 need
+firmware v0.200+ on the device.*
 
 ---
 
 ## 4.0.1
 
-**It starts faster.** The app used to spend about three seconds on every launch
-checking whether a copy was already running — time it spent waiting on a check
-that could never answer any quicker. Now it opens in about two seconds.
+### AccelTest results are recorded and shown
 
-Nothing else changed, and nothing you do is different.
+If your MBC2 is on firmware **v0.200 or newer** it has an **AccelTest** in its
+own menu. It spins the motor up and then loads it, reporting the speed the motor
+still holds at three levels of load.
+
+Run it from the device as usual — there is no way to start it from the app — and
+the app now records the result automatically. Results appear under
+**Motors → AccelTest**, and on each motor's own record.
+
+Each result shows, per direction:
+
+- **No load / Low load / High load** — the RPM the motor held, with the current
+  it drew to get there
+- **Load retention** — the high-load RPM as a percentage of the no-load RPM
+
+Load retention is the number worth caring about. It is how well a motor holds
+its speed when it is actually working, and peak RPM cannot tell you: a
+Torque-Tuned 2 and a box-stock motor measured within 2% of each other spinning
+free, and 63% apart under load.
+
+Two things to know:
+
+- **Select the motor before you start the test.** If you forget, the result is
+  still saved — it just arrives unattributed, and you can attach it to a motor
+  afterwards from the AccelTest tab.
+- **Only compare results taken at the same voltage**, which is shown at the top
+  of every result.
+
+### Break-in programs keep proper time in the background
+
+If you minimised the app during a program run, a step could carry on past the
+time it was meant to stop — Windows and browsers deliberately slow down timers
+in windows you are not looking at, and the app was relying on one of those
+timers to end each step. The motor ran longer than the program asked for and
+nothing said so.
+
+Step timing no longer depends on that. If a step does somehow end late, the app
+now tells you during the run and again at the end, so you know that session did
+not follow the program it says it did.
+
+### It starts faster, and opens in the middle of the screen
+
+The app used to spend about three seconds on every launch checking whether a
+copy was already running — time spent waiting on a check that could never answer
+any quicker. It now opens in about two seconds.
+
+The window also opens centred, instead of low and to the right.
+
+### Mac package fixed
+
+The Mac zip was built incorrectly and would probably not have worked. It is
+rebuilt properly, and the launcher no longer needs the manual `chmod` step. The
+Mac package is **still untested on a real Mac** — this fixes a fault found by
+inspection.
 
 ---
 
@@ -73,7 +124,7 @@ begin. Manual runs are now recorded properly.
 
 ### One-click Windows installer
 
-Download `MBC2Dashboard-Setup-4.0.exe`, run it, and a desktop icon appears.
+Download `MBC2Dashboard-Setup-<version>.exe`, run it, and a desktop icon appears.
 No Python, no bat files, no zip juggling.
 
 ### Your motor data is permanently safe
@@ -96,7 +147,7 @@ SQLite's own backup API (which correctly checkpoints any WAL file). The last
 
 ### USB / portable mode
 
-Unzip `MBC2Dashboard-WindowsPortable-4.0.zip` to a USB stick and double-click
+Unzip `MBC2Dashboard-WindowsPortable-<version>.zip` to a USB stick and double-click
 `Start MBC2 (USB).bat`. Sessions are saved to a `data\` folder on the stick
 and travel with it between machines. The host PC needs the CH340 driver — no
 browser and no Python, as stated in the README.
@@ -164,12 +215,19 @@ The standard CH340 download page: https://www.wch-ic.com/downloads/CH341SER_EXE.
 
 ## Mac package
 
-The Mac package (`MBC2Dashboard-Mac-4.0.zip`) is provided as a convenience but
-is **UNTESTED** — the developers run Windows. It contains Python source files
-and a launcher `.command` script, and it opens in a browser rather than a
+The Mac package (`MBC2Dashboard-Mac-<version>.zip`) is provided as a convenience
+but is **UNTESTED** — the developers run Windows. It contains Python source
+files and a launcher `.command` script, and it opens in a browser rather than a
 native window.
 
 Requirements: Python 3, the `pyserial` package
 (`python3 -m pip install --user pyserial` — the launcher warns if it's
 missing), a browser, and the Mac CH340 driver. Please report issues via
 GitHub.
+
+On first launch macOS will refuse to open it, because the package is not signed
+by a registered Apple developer. Depending on your macOS version the message is
+either "cannot be verified" or the more alarming **"is damaged and can't be
+opened"** — the second one is false, and it is not a sign the download went
+wrong. Either way: **right-click the `.command` → Open → Open**, once, and it
+will run normally from then on.

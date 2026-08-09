@@ -2,7 +2,12 @@
 
 ## v4.0.1 (current, unreleased)
 
+- **AccelTest capture and display** (firmware v0.200+) — `ACCEL_*` lines are recorded into `accel_tests` / `accel_test_passes` with the raw lines kept verbatim; results shown under Motors → AccelTest and on each motor's record, with load retention as the headline figure. The test can only be started on the device — there is no serial command for it. A test with no motor selected is saved unattributed and can be attached afterwards
+- **Program step timing no longer trusts `setTimeout`** — browsers throttle timers in a hidden window, so a backgrounded run could power the motor past the programmed step time. The deadline is wall-clock and is checked on every telemetry row (SSE is not throttled) and on `visibilitychange`; a late step is reported during the run and at the end
+- **Mac zip fixed** — `Compress-Archive` was writing backslash path separators, which macOS may extract as flat files, leaving the launcher unable to find `app/server.py`. Now built by `mac/make-mac-zip.ps1`, which also sets the launcher's execute bit and self-checks. Still untested on real Mac hardware
+- **Window opens centred** — no `x`/`y` was passed to `create_window`, so Windows applied its cascade offset
 - **Faster startup** — the already-running and port-in-use checks each blocked on a connection to a closed loopback port, costing ~3s of every launch against ~0.04s of real work. A single short-timeout probe now answers all three cases. From source 3.38s → 0.62s; packaged exe 4.8s → 1.9s warm
+- **First automated test** — `tests/test_program_timing.js` covers the step-timing behaviour above. Node is a developer tool only; the app does not depend on it
 
 ## v4.0 (tagged 2026-08-07)
 
@@ -88,8 +93,8 @@
 
 ## v3.2
 
-- Added connection lifecycle tracking: `connections` table, `connection_id` FK on sessions
-- Added `duration_sec` and `end_reason` columns to `sessions`
+- Added connection lifecycle tracking: `connections` table
+- ~~Added `connection_id` FK, `duration_sec` and `end_reason` columns to `sessions`~~ — **this never actually happened.** Checked 2026-08-09 against `schema.sql` and a live database: none of those three columns exist on `sessions`, and `connections.total_sessions` is 0 on every row as a result. The claim was carried into `CLAUDE.md` and `docs/DB_SCHEMA.md` and believed for months; corrected in both. Left here struck through rather than deleted, so the same entry does not get re-added from an old copy
 - Crash Log tab now shows full session history per connection alongside crash snapshots
 - Loop/round tracking: `loop_number`, `max_loop`, `prog_loop`, `prog_max_loop` captured in session data and crash events
 - Schema auto-migrates via `CREATE TABLE IF NOT EXISTS` and `_add_column_if_missing` on launch

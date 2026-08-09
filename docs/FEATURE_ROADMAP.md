@@ -315,20 +315,33 @@ line onward — `lastSetVoltageMv` in the CSV parser.
 - [x] On the motor record, the history of its AccelTests.
 - [x] Attach an unattributed test to a motor after the fact, and delete a test.
       Needed because 9.1 deliberately saves tests with no motor selected.
+- [x] Units on every figure, plus a legend and per-cell tooltips. The first
+      version showed a bare number over "756 mA" and left the reader to infer
+      that the big one was RPM — which is exactly what happened.
 
 Load retention is shown per pass here rather than waiting for 9.3 — it is one
 division and it is the only figure that makes two cards comparable at a glance.
 Colour thresholds (≥75% good, ≥55% mid) come from the six real runs: box stock
 46–70%, Torque-Tuned 2 79–85%.
 
+Confirmed in use 2026-08-09: panel reviewed on screen and unattributed tests
+successfully attached to motors.
+
 ### 9.3 Use it
 
 - [ ] Compare motors at the same load rather than on peak RPM, voltage-matched.
-- [ ] **Load retention** (high-load ÷ no-load) as a single headline figure — the
+- [x] **Load retention** (high-load ÷ no-load) as a single headline figure — the
       one number that separated the TT2 from box stock while peak RPM could not.
+      Delivered early, in 9.2, per test. What is still missing is retention used
+      *across* motors — a ranking rather than a number on each card.
 - [ ] Pre/post break-in comparison: does break-in improve *loaded* RPM more than
       free RPM? This is answerable once a few motors have before/after tests, and
       is the first question this data makes askable.
+
+Blocked on data rather than on code: at the time of writing only a handful of
+AccelTests exist, and a comparison view of one motor is not worth building.
+Keep running tests; revisit when several motors have results at a common
+voltage.
 
 ### Open questions
 

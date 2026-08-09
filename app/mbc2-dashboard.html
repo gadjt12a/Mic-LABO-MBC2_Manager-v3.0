@@ -489,6 +489,12 @@
 .at-load-name { font-size:9px; letter-spacing:1px; color:var(--text3); text-transform:uppercase; }
 .at-load-rpm { font-family:var(--mono); font-size:15px; color:var(--text); }
 .at-load-ma { font-family:var(--mono); font-size:10px; color:var(--text3); }
+.at-unit { font-size:9px; color:var(--text3); font-weight:400; letter-spacing:0.5px; }
+.at-legend { background:var(--bg3); border:1px solid var(--border2); border-radius:3px;
+             padding:10px 12px; margin-bottom:10px; font-size:11px; color:var(--text2);
+             line-height:1.6; }
+.at-legend b { color:var(--text); font-weight:600; }
+.at-legend .at-key { font-family:var(--mono); color:var(--accent); }
 .at-ret { margin-left:auto; text-align:right; }
 .at-ret-val { font-family:var(--mono); font-size:20px; font-weight:700; line-height:1; }
 .at-ret-lbl { font-size:9px; letter-spacing:1px; color:var(--text3); text-transform:uppercase; }
@@ -5111,6 +5117,21 @@ function initMotorRegistry() {
 
     <div id="mrPanelAccel" style="display:none">
       <p class="mr-sec-lbl" style="margin-top:0">AccelTest results</p>
+      <div class="at-legend">
+        AccelTest measures how fast a motor still turns as the device loads it up.
+        Each pass reports three points:<br>
+        <span class="at-key">No load</span> → <span class="at-key">Low load</span> →
+        <span class="at-key">High load</span>, one per direction if you test both.<br><br>
+        The <b>big number is RPM</b>. The small one under it is the <b>current in mA</b>
+        the motor drew to reach that speed — worth showing because the device picks the
+        load levels <em>per motor</em>, so "no load" is not the same current on two
+        different motors, and the RPMs are only comparable once you can see that.<br><br>
+        <b>Load retention</b> is high-load RPM as a percentage of no-load RPM: how well
+        the motor holds its speed when worked. It is the figure peak RPM cannot give you
+        — two motors can be within 2% of each other unloaded and 60% apart under load.
+        Higher is better. Only compare motors tested at the <b>same voltage</b>, shown in
+        each card's header.
+      </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.5;">
         AccelTest is started on the device itself — the app records whatever it sees.
         Select the motor in Device Control <em>before</em> starting the test and it will
@@ -5157,11 +5178,15 @@ function atRetClass(pct) {
 function atNum(v)  { return (v || v === 0) ? Number(v).toLocaleString() : '—'; }
 function atDirName(d) { return d === 'R' ? 'Reverse' : d === 'N' ? 'Normal' : (d || '?'); }
 
-function atLoadCell(name, rpm, ma) {
-  return `<div class="at-load">
+// The big number is RPM and the small one is the current the motor drew to
+// reach it. Both units are shown: without them the pairing is a guess, and the
+// current is the more surprising of the two — it is the load level the device
+// picked for this motor, not a setting.
+function atLoadCell(name, rpm, ma, hint) {
+  return `<div class="at-load" title="${escHtml(hint)}">
     <div class="at-load-name">${name}</div>
-    <div class="at-load-rpm">${atNum(rpm)}</div>
-    <div class="at-load-ma">${atNum(ma)} mA</div>
+    <div class="at-load-rpm">${atNum(rpm)}<span class="at-unit"> rpm</span></div>
+    <div class="at-load-ma">at ${atNum(ma)}<span class="at-unit"> mA</span></div>
   </div>`;
 }
 
@@ -5170,12 +5195,15 @@ function atPassHtml(p) {
   return `<div class="at-pass">
     <div class="at-pass-lbl">PASS ${p.pass_no} · ${atDirName(p.direction)}</div>
     <div class="at-loads">
-      ${atLoadCell('No load',   p.no_rpm, p.no_ma)}
-      ${atLoadCell('Low load',  p.lo_rpm, p.lo_ma)}
-      ${atLoadCell('High load', p.hi_rpm, p.hi_ma)}
-      <div class="at-ret">
+      ${atLoadCell('No load',   p.no_rpm, p.no_ma,
+        'Free speed — the motor spinning against almost nothing. Highest RPM, lowest current.')}
+      ${atLoadCell('Low load',  p.lo_rpm, p.lo_ma,
+        'A light braking load applied by the device.')}
+      ${atLoadCell('High load', p.hi_rpm, p.hi_ma,
+        'A heavy braking load — closest to a car climbing or fighting a corner. This is the number that matters on track.')}
+      <div class="at-ret" title="High-load RPM as a percentage of no-load RPM. How well the motor holds its speed under load — the figure peak RPM cannot show you.">
         <div class="at-ret-val ${atRetClass(pct)}">${pct === null ? '—' : pct + '%'}</div>
-        <div class="at-ret-lbl">retained</div>
+        <div class="at-ret-lbl">load retention</div>
       </div>
     </div>
   </div>`;

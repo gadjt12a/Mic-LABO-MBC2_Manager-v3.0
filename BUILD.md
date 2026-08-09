@@ -179,8 +179,20 @@ returned the stored test, the served page carried the new AccelTest panel and
 measured on screen at 1400x852 in a 1536x912 work area — 68 px clear each side,
 30 px top and bottom. Launch to serving **2.36 s warm**.
 
-⚠ Not verified in this build: the AccelTest panel has not been looked at on
-screen, and nothing here has been run on a Mac.
+**Rebuilt 2026-08-09 at commit `3588528`** to pick up the AccelTest unit
+labelling. Same verification; published exe confirmed byte-identical to the
+build output, and the served page carries `at-unit`, `at-legend` and
+`load retention`.
+
+⚠ A locked `dist\MBC2Dashboard.exe` fails the copy with "Device or resource
+busy" — close the app before publishing, and check the copy actually
+happened rather than trusting the file that is already there. Guard any
+smoke test with a `/api/ping` check first: launching the exe while an
+instance is already running just opens a second window onto it, so the page
+you then inspect is the *old* build, and shutting it down closes the
+instance someone was using.
+
+⚠ Not verified in this build: nothing here has been run on a Mac.
 
 **Release build, 2026-08-07, commit `c335703`.** Cut from a clean clone of
 `main` after the app-driven runner, ACK checking and connection-close work.

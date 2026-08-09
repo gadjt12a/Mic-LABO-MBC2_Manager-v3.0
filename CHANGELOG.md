@@ -24,6 +24,17 @@ All notable changes to MBC2 Dashboard are documented here.
 
 ### Fixed
 
+- **Break-in program steps could run long if the window was not in front.**
+  Step timing was a bare `setTimeout`, and browsers throttle timers in a
+  hidden or occluded window — Chrome aligns them to roughly one-minute wake-ups
+  after five minutes hidden. Since that timer is what ends a step, minimising
+  the app during a run could leave the motor powered well past the time the
+  program specified, with nothing to show it had happened. The deadline is now
+  wall-clock and is also checked on every telemetry row (SSE delivery is not
+  throttled) and when the window becomes visible again. If a step does end late
+  anyway, it is reported during the run and again at the end — a run whose steps
+  overran did not follow the program it claims to have followed.
+
 - **The Mac package zip was malformed and probably unusable.** `Compress-Archive`
   wrote backslash path separators into it, which the zip spec forbids; macOS can
   extract such an archive as flat files literally named

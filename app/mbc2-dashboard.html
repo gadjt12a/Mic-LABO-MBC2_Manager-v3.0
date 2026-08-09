@@ -2278,6 +2278,7 @@ function appProgramToDeviceProgram(p) {
 // Program Sync — and running one of those still uses START_PROG:n.
 let appRun = null;          // null when no app-driven program is running
 let appRunTicker = null;    // 1s interval that refreshes the countdown
+let appRunAdvancing = false; // guards the several paths that can end a phase
 
 function appStepRunSec(s) {
   return programTimeToSeconds(s.time !== undefined ? s.time : s.runtimeSec);
@@ -2327,13 +2328,15 @@ async function startAppProgram() {
     motorOn:   false,   // tracks whether START is still in effect
     dir:       null,    // direction the device confirmed
     appliedVolts: null, // clamped value from the SET_VOLTAGE ACK
-    voltageWarning: null
+    voltageWarning: null,
+    maxOverrunMs: 0     // worst late step end, if timers were throttled
   };
+  appRunAdvancing = false;
 
   showToast(`Running "${appRun.name}" — ${steps.length} step${steps.length > 1 ? 's' : ''}` +
             ` × ${appRun.cycles} cycle${appRun.cycles > 1 ? 's' : ''}`);
   if (appRunTicker) clearInterval(appRunTicker);
-  appRunTicker = setInterval(updateAppRunStatus, 1000);
+  appRunTicker = setInterval(() => { appRunCheckDeadline(); updateAppRunStatus(); }, 1000);
   updateAppRunButtons();
   await appRunEnterPhase('run');
 }
@@ -2444,6 +2447,24 @@ async function appRunEnterPhase(phase) {
   updateAppRunStatus();
 }
 
+// Step timing must not depend on setTimeout alone.
+//
+// Browsers throttle timers in a backgrounded or occluded window — Chrome aligns
+// them to roughly one-minute wake-ups after five minutes hidden. That is fine
+// for a countdown display and not fine here: this timer is what ends a step, so
+// a throttled wake-up runs the motor longer than the program asked for. The
+// break-in would be silently wrong, and minimising the window is a normal thing
+// to do during a three-minute run.
+//
+// So the deadline is wall-clock (`endsAt`) and three independent things check
+// it. The important one is telemetry: CSV rows arrive over SSE at ~10 Hz and
+// network events are not subject to timer throttling, so a hidden window still
+// ends its steps on time. The timer stays as the primary path (it is exact when
+// the window is visible, and it covers a cool phase where the device may go
+// quiet), and visibilitychange catches the moment of un-hiding.
+//
+// appRunAdvancing exists because those paths can now overlap; without it a step
+// boundary could be processed twice.
 function appRunSchedule(ms) {
   if (!appRun) return;
   clearTimeout(appRun.timer);
@@ -2452,25 +2473,48 @@ function appRunSchedule(ms) {
   appRun.timer = setTimeout(appRunAdvance, ms);
 }
 
+// Safety net for the timer arriving late. Cheap enough to call per telemetry row.
+function appRunCheckDeadline() {
+  if (!appRun || appRun.paused || appRunAdvancing) return;
+  if (!appRun.endsAt || Date.now() < appRun.endsAt) return;
+  appRunAdvance();
+}
+
 // A phase ended: cool down if this step asks for it, else move on.
 async function appRunAdvance() {
-  if (!appRun || appRun.paused) return;
+  if (!appRun || appRun.paused || appRunAdvancing) return;
+  appRunAdvancing = true;
+  try {
+    // How late the phase actually ended. Zero when the timer fired on time;
+    // seconds or minutes if the window was throttled and only telemetry or
+    // un-hiding caught it. Worth surfacing — it means the motor ran longer than
+    // the program specified, which the operator needs to know.
+    const lateMs = appRun.endsAt ? Date.now() - appRun.endsAt : 0;
+    if (lateMs > 2000) {
+      appRun.maxOverrunMs = Math.max(appRun.maxOverrunMs || 0, lateMs);
+      console.warn('[MBC2] Step overran by', Math.round(lateMs / 1000), 's');
+      showToast(`Step ${appRun.stepIndex + 1} overran by ${Math.round(lateMs / 1000)}s ` +
+                `— keep the window visible during a run`, true);
+    }
 
-  if (appRun.phase === 'run' && appStepCoolSec(appRun.steps[appRun.stepIndex]) > 0) {
-    await appRunEnterPhase('cool');
-    return;
-  }
-
-  appRun.stepIndex++;
-  if (appRun.stepIndex >= appRun.steps.length) {
-    appRun.stepIndex = 0;
-    appRun.cycle++;
-    if (appRun.cycle > appRun.cycles) {
-      await finishAppProgram(true);
+    if (appRun.phase === 'run' && appStepCoolSec(appRun.steps[appRun.stepIndex]) > 0) {
+      await appRunEnterPhase('cool');
       return;
     }
+
+    appRun.stepIndex++;
+    if (appRun.stepIndex >= appRun.steps.length) {
+      appRun.stepIndex = 0;
+      appRun.cycle++;
+      if (appRun.cycle > appRun.cycles) {
+        await finishAppProgram(true);
+        return;
+      }
+    }
+    await appRunEnterPhase('run');
+  } finally {
+    appRunAdvancing = false;
   }
-  await appRunEnterPhase('run');
 }
 
 async function pauseAppProgram() {
@@ -2509,6 +2553,7 @@ async function nextAppStep() {
 async function finishAppProgram(completed) {
   if (!appRun) return;
   const name = appRun.name;
+  const overrunSec = Math.round((appRun.maxOverrunMs || 0) / 1000);
   clearTimeout(appRun.timer);
   appRun = null;
   if (appRunTicker) { clearInterval(appRunTicker); appRunTicker = null; }
@@ -2516,6 +2561,11 @@ async function finishAppProgram(completed) {
   updateAppRunStatus();
   await deviceStop();       // sends STOP, ends the recording and saves it
   showToast(completed ? `Program "${name}" complete` : `Program "${name}" stopped`);
+  // Say it again at the end: a mid-run toast is easy to miss, and a run whose
+  // steps overran did not follow the program it claims to have followed.
+  if (overrunSec > 0) {
+    showToast(`Timing was not exact — worst step overran by ${overrunSec}s`, true);
+  }
 }
 
 function updateAppRunButtons() {
@@ -2897,6 +2947,10 @@ function parseCSVTelemetry(line) {
 
   // Track last data timestamp for silence watchdog
   lastDataTimestamp = new Date();
+
+  // SSE delivery is not throttled in a hidden window, unlike setTimeout, so
+  // this is what keeps program step timing honest when the app is backgrounded.
+  appRunCheckDeadline();
 
   rawCount++;
   document.getElementById('rawCount').textContent = rawCount;
@@ -6436,6 +6490,13 @@ async function checkServerHealth() {
   if (!ok) showToast('Server offline — sessions cannot be saved to database', true);
   else if (wasKnown) showToast('Server back online');
 }
+
+// Coming back into view is the moment a throttled timer is most likely to be
+// overdue, so reconcile the step deadline immediately rather than waiting for
+// the next tick.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) appRunCheckDeadline();
+});
 
 // Warn before closing the tab mid-recording — unsaved rows would be lost
 window.addEventListener('beforeunload', (e) => {

@@ -110,6 +110,13 @@ Key architectural facts:
   connection to a *closed* loopback port takes ~2 s to be refused, so long
   timeouts cost ~3 s of every launch. A real listener accepts in ~2 ms, so the
   short timeout cannot produce a false "port free". Raising it undoes the fix.
+- **`appRunCheckDeadline()` in `parseCSVTelemetry` is not redundant with the
+  step timer — do not remove it.** Program step timing is wall-clock
+  (`appRun.endsAt`); the `setTimeout` in `appRunSchedule` is only the primary
+  path. Browsers throttle timers in a hidden window, and that timer is what
+  ends a step, so relying on it alone runs the motor past the programmed time.
+  SSE telemetry is not throttled, which is why the check rides on the data
+  path. `appRunAdvancing` guards the several routes that can now end a phase.
 - **The Mac package is source + browser, not a `.app`.** `mac\BUILD MAC PACKAGE`
   stages `app/` beside a `.command` launcher and zips it. There is no
   PyInstaller, no pywebview, no `.icns`, no App Transport Security plist and no

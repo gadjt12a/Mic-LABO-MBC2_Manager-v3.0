@@ -148,6 +148,7 @@ Record interpreter and PyInstaller version each time a release build is cut.
 | 4.0 (test-matrix fixes, commit `cb3fe64`) | 2026-08-07 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 | **4.0 RELEASE, commit `c335703`** | 2026-08-07 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 | **4.0.1, commit `06c0897`** | 2026-08-07 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
+| **4.0.1, commit `194b0b3`** | 2026-08-09 | same as above | 6.21.0 (+ pywebview 6.2.1, pyserial 3.5) |
 
 The 2026-08-06 rebuild replaced artefacts that had been built *before* the
 pywebview commit and therefore still shipped the browser-based app. If the
@@ -164,6 +165,22 @@ and is not representative; always measure warm.
 
 ⚠ `dist/` now holds **4.0.1** artefacts. The `v4.0` tag's artefacts are *not*
 here any more — rebuild them from the tag if a v4.0 GitHub release is ever cut.
+
+**4.0.1 rebuild, 2026-08-09, commit `194b0b3`.** Clean clone of `main`, covering
+the AccelTest results panel, the Mac zip fix, the program step-timing fix and
+window centring. `node tests/test_program_timing.js` passed in the clone before
+building. Sizes: exe 21.28 MB, installer 23.04 MB, portable zip 21.08 MB, Mac
+zip 0.10 MB. Verified: PE machine `0x8664`; no `.db` anywhere in `dist/`; no
+PMPE/SPRF in the bundled `default_programs.json`; Mac zip opens with a valid
+central directory, forward slashes throughout, `.command` at `-rwxr-xr-x` with
+LF endings. Smoke test: `/api/info` → `{"version": "4.0.1"}`, `/api/accel`
+returned the stored test, the served page carried the new AccelTest panel and
+`appRunCheckDeadline`, `/api/shutdown` released the port cleanly. Window
+measured on screen at 1400x852 in a 1536x912 work area — 68 px clear each side,
+30 px top and bottom. Launch to serving **2.36 s warm**.
+
+⚠ Not verified in this build: the AccelTest panel has not been looked at on
+screen, and nothing here has been run on a Mac.
 
 **Release build, 2026-08-07, commit `c335703`.** Cut from a clean clone of
 `main` after the app-driven runner, ACK checking and connection-close work.

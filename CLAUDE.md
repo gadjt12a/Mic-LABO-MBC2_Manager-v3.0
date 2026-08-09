@@ -117,6 +117,8 @@ Key architectural facts:
   ends a step, so relying on it alone runs the motor past the programmed time.
   SSE telemetry is not throttled, which is why the check rides on the data
   path. `appRunAdvancing` guards the several routes that can now end a phase.
+  Covered by `node tests/test_program_timing.js` — run it after touching the
+  runner. Node is a dev tool only; nothing in the app depends on it.
 - **The Mac package is source + browser, not a `.app`.** `mac\BUILD MAC PACKAGE`
   stages `app/` beside a `.command` launcher and zips it. There is no
   PyInstaller, no pywebview, no `.icns`, no App Transport Security plist and no

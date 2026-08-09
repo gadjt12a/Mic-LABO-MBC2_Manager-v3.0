@@ -33,6 +33,19 @@ git checkout v4.0      REM or the tag you are releasing
 
 ---
 
+## Run the tests first
+
+    node tests/test_program_timing.js
+
+Exit 0 is a pass. These cover the break-in program runner's step timing, which
+is the part of the app that can silently run a motor for the wrong length of
+time. See [`tests/README.md`](tests/README.md).
+
+Node is a **developer tool only** — nothing in the build or the shipped package
+depends on it. If Node is not installed, skip this step.
+
+---
+
 ## Build the Windows exe
 
     windows\BUILD EXE (developer use only).bat

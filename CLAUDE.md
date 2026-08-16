@@ -104,6 +104,12 @@ Key architectural facts:
   watching it from the first `ACCEL_` line onward records the wrong value — it
   logged 1500 mV for a 3.0 V test. `lastSetVoltageMv` is tracked continuously in
   `parseCSVTelemetry` for exactly this reason.
+- **Storing raw lines is not total insurance, and `test_voltage_mv` proves it.**
+  The device never sends the test voltage in any `ACCEL_*` line, so a wrongly
+  captured voltage cannot be recovered from `raw_lines` afterwards. `accel_tests`
+  row 1 (2026-08-08, pre-fix) is stuck at 1500 mV. Raw lines protect against
+  *our parser* being wrong, not against a field that was never transmitted — do
+  not answer "we can re-derive it later" for anything the device does not send.
 
 ---
 

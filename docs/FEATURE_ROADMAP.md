@@ -308,6 +308,18 @@ test). `col11` reads 0 while the device drives its own load ramp, so it must be
 sampled continuously from *before* the test starts, not from the first `ACCEL_`
 line onward — `lastSetVoltageMv` in the CSV parser.
 
+> ⚠ **`accel_tests` row 1 still carries that wrong voltage, and it cannot be
+> recovered.** The raw lines were stored precisely so a later decode could be
+> applied retrospectively, and for voltage that insurance does not pay out: the
+> device never sends the test voltage in any `ACCEL_*` line, so it is not in the
+> stored text either. (`ACCEL_CK` field 2 reads ~2015 on both a 3.0 V box-stock
+> run and a 3.0 V TT2 run, so it is not the voltage.) The value is known only
+> from the session notes of 2026-08-08. Treat that row as voltage-unknown in any
+> comparison, or correct it by hand.
+>
+> The wider lesson: storing raw lines protects against *our* parser being wrong,
+> not against the device never having sent the field.
+
 ### 9.2 Show it — **done**
 
 - [x] A result panel: No / Lo / Hi RPM per direction, with the test voltage and
@@ -338,10 +350,17 @@ successfully attached to motors.
       free RPM? This is answerable once a few motors have before/after tests, and
       is the first question this data makes askable.
 
-Blocked on data rather than on code: at the time of writing only a handful of
-AccelTests exist, and a comparison view of one motor is not worth building.
-Keep running tests; revisit when several motors have results at a common
-voltage.
+**Blocked on data, not on code.** Checked against the live database on
+2026-08-16: there is **exactly one** stored AccelTest, on one motor (`KS-R-01`),
+and it is the pre-fix record whose `test_voltage_mv` reads 1500 — see the
+warning below. A voltage-matched comparison needs at least two motors tested at
+the same voltage, so there is currently nothing to compare.
+
+The six runs that produced the decode in Phase 8 were made *before* capture
+existed and were never stored; do not count them as data on hand.
+
+Revisit when several motors have results at a common voltage. Until then,
+running more tests is the useful work — 9.3 is not waiting on a decision.
 
 ### Open questions
 

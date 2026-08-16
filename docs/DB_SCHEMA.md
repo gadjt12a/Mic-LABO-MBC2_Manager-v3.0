@@ -231,6 +231,14 @@ produces one pass each way.
 > tests already recorded. `session_data.raw_line` has been empty for every row
 > ever written — that is the mistake being avoided here.
 
+> ⚠ **`test_voltage_mv` is the one field the raw lines cannot rescue.** It does
+> not come from the device at all — it is sampled from CSV `col11` before the
+> test begins — so if it was captured wrongly it cannot be re-derived from
+> `raw_lines` later. `accel_tests` row 1 (recorded 2026-08-08, before the fix)
+> reads 1500 mV for a run believed to have been at 3.0 V, and that is now
+> unrecoverable. Storing raw lines protects against our parser being wrong, not
+> against a field the device never sent.
+
 ---
 
 ## Migration helper pattern

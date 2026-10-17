@@ -72,17 +72,9 @@ Runs on Windows. Output: `dist\MBC2Dashboard-Mac-<ver>.zip`
 
 ### Do not change how that zip is written
 
-The zip is built by `mac\make-mac-zip.ps1` on Windows, or
-`mac/make-mac-zip.sh` on Linux, which writes entries directly via
-`System.IO.Compression`. Both obvious alternatives are broken, and both fail
-only once the package reaches a Mac:
-
-Both defects below are **Windows-only**, so the Linux script is a short
-`zip -r -X` -- Info-ZIP writes forward slashes, does not pad, and carries the
-Unix mode by itself. It keeps the self-check regardless, reading the archive
-back with Python's `zipfile`, and adds one the PowerShell version does not
-have: a launcher with CRLF endings fails on macOS with a "bad interpreter"
-message that names the shell rather than the line endings.
+On Windows the zip is built by `mac\make-mac-zip.ps1`, which writes entries
+directly via `System.IO.Compression`. Both obvious alternatives are broken,
+and both fail only once the package reaches a Mac:
 
 - **`Compress-Archive`** (PowerShell 5.1) writes **backslash** path separators.
   The zip spec requires forward slashes, and macOS may extract the tree as flat
@@ -97,6 +89,15 @@ The script also sets the Unix execute bit (`ExternalAttributes`) on the
 `.command`, which neither alternative can do, and verifies its own output: it
 fails the build on backslashes, an empty archive, or a launcher that is not
 marked executable.
+
+**On Linux, use `mac/make-mac-zip.sh`.** Both defects above are Windows-only,
+so it is a short `zip -r -X`: Info-ZIP writes forward slashes, does not pad,
+and carries the Unix mode by itself. It keeps the same read-it-back self-check
+-- via Python's `zipfile`, which shares no code with the writer -- and adds two
+the PowerShell version does not have: trailing bytes after the
+end-of-central-directory record, and a launcher with CRLF line endings, which
+fails on macOS with a "bad interpreter" message that names the shell rather
+than the line endings.
 
 Note the Mac package is **source + browser**, not a PyInstaller `.app`. There is
 no pywebview, no `.icns`, no App Transport Security plist and no Gatekeeper

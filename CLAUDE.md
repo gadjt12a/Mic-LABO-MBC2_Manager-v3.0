@@ -162,7 +162,9 @@ Key architectural facts:
   had exactly this). The second pads past the end-of-central-directory record,
   so strict readers refuse to open the file at all. Use
   `mac\make-mac-zip.ps1`, which also sets the launcher's Unix execute bit and
-  self-checks. Both failures are invisible on Windows.
+  self-checks. Both failures are invisible on Windows. On Linux use
+  `mac/make-mac-zip.sh`: neither defect exists there, so it is a plain
+  `zip -r -X`, but it keeps the same read-it-back self-check.
 - **Unload warnings must not rely on `beforeunload`.** WebView2 ignores it
   entirely, so the packaged app got no prompt and silently discarded unsaved
   rows. The close confirmation is a native pywebview dialog driven by recording
